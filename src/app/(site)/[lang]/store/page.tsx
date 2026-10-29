@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDictionary, hasLocale } from "@/lib/i18n";
-import { getCompanies, getProducts } from "@/lib/data";
+import { getCompanies, getProducts, getSettings } from "@/lib/data";
 import { PharmacyStore } from "@/components/site/store/pharmacy-store";
 import type { StoreShelf } from "@/components/site/store/types";
 
@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/store">): 
 export default async function StorePage({ params }: PageProps<"/[lang]/store">) {
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
-  const [companies, products] = await Promise.all([getCompanies(), getProducts()]);
+  const [companies, products, settings] = await Promise.all([getCompanies(), getProducts(), getSettings()]);
 
   // One shelf per active company, holding only the fields the 3D store needs.
   const shelves: StoreShelf[] = companies
@@ -36,6 +36,7 @@ export default async function StorePage({ params }: PageProps<"/[lang]/store">) 
           name_ar: p.name_ar,
           subtitle_en: p.subtitle_en,
           subtitle_ar: p.subtitle_ar,
+          active_ingredient: p.active_ingredient,
           pack_size: p.pack_size,
           price: Number(p.price),
           compare_at_price: p.compare_at_price ? Number(p.compare_at_price) : null,
@@ -46,5 +47,7 @@ export default async function StorePage({ params }: PageProps<"/[lang]/store">) 
     }))
     .filter((s) => s.products.length > 0);
 
-  return <PharmacyStore lang={lang} t={getDictionary(lang)} shelves={shelves} />;
+  return (
+    <PharmacyStore lang={lang} t={getDictionary(lang)} shelves={shelves} whatsapp={settings.whatsapp} freeMin={Number(settings.free_delivery_min)} />
+  );
 }

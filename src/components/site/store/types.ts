@@ -5,6 +5,7 @@ export type StoreProduct = {
   name_ar: string;
   subtitle_en: string | null;
   subtitle_ar: string | null;
+  active_ingredient: string | null;
   pack_size: string | null;
   price: number;
   compare_at_price: number | null;
@@ -25,5 +26,8 @@ export type StoreShelf = {
   products: StoreProduct[];
 };
 
-/** A product box flying from its shelf into the cart after the customer confirms it. */
+/** A product on a company bay: `shelf` is the company index, `slot` the product index. */
+export type Pick = { shelf: number; slot: number };
+
+/** A product box flying from its bay into the cart after the customer adds it. */
 export type Flight = { key: number; shelf: number; slot: number };

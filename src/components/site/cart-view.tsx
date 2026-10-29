@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Minus, Plus, ShoppingCart, Trash2, Truck } from "lucide-react";
 import { fmt, type Dictionary, type Locale } from "@/lib/i18n";
 import { money, waLink } from "@/lib/format";
+import { groupByCompany, orderMessage } from "@/lib/order";
 import { useCart, type CartItem } from "./cart";
 import { WhatsAppIcon } from "./icons";
 
@@ -16,7 +17,6 @@ export function CartView({ lang, t, whatsapp, freeMin }: Props) {
   const [type, setType] = useState<"retail" | "business">("retail");
   const c = t.cart;
   const name = (i: CartItem) => (lang === "ar" ? i.name_ar : i.name_en);
-  const comp = (i: CartItem) => (lang === "ar" ? i.company_ar : i.company_en);
 
   if (!ready) return <div className="h-64 animate-pulse rounded-2xl bg-surface" />;
 
@@ -31,28 +31,13 @@ export function CartView({ lang, t, whatsapp, freeMin }: Props) {
       </div>
     );
 
-  // Group lines by company so the warehouse can route each part of the order
-  const groups = items.reduce<Record<string, CartItem[]>>((g, i) => {
-    (g[comp(i)] ||= []).push(i);
-    return g;
-  }, {});
+  const groups = groupByCompany(items, lang);
 
   function send(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    const lines = [t.wa.order, ""];
-    for (const [company, list] of Object.entries(groups)) {
-      lines.push(`*${company}*`);
-      list.forEach((i) => lines.push(`• ${name(i)}${i.pack_size ? ` (${i.pack_size})` : ""} × ${i.qty} = ${money(i.price * i.qty, lang)}`));
-      lines.push("");
-    }
-    lines.push(`${t.wa.total}: ${money(subtotal, lang)}`, "");
-    lines.push(`${t.wa.customer}: ${type === "business" ? c.business : c.retail}`);
-    for (const key of ["name", "phone", "area", "notes"] as const) {
-      const v = String(f.get(key) || "").trim();
-      if (v) lines.push(`${c[key]}: ${v}`);
-    }
-    window.open(waLink(whatsapp, lines.join("\n")), "_blank", "noopener");
+    const fields = Object.fromEntries((["name", "phone", "area", "notes"] as const).map((k) => [k, String(f.get(k) || "")]));
+    window.open(waLink(whatsapp, orderMessage(items, subtotal, lang, t, type, fields)), "_blank", "noopener");
   }
 
   const remaining = Math.max(0, freeMin - subtotal);
@@ -61,7 +46,7 @@ export function CartView({ lang, t, whatsapp, freeMin }: Props) {
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
       <div className="space-y-6">
-        {Object.entries(groups).map(([company, list]) => (
+        {groups.map(([company, list]) => (
           <section key={company} className="rounded-2xl border border-line">
             <h2 className="border-b border-line bg-surface px-4 py-3 text-sm font-bold">{company}</h2>
             <ul className="divide-y divide-line">

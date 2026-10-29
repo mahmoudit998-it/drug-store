@@ -42,6 +42,22 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, weig
   } while (ctx.measureText(text).width > maxW && px > 10);
 }
 
+function drawLogo(ctx: CanvasRenderingContext2D, tex: THREE.Texture, url: string, x: number, y: number, size: number) {
+  loadImage(url)
+    .then((img) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, y, size, size, size * 0.2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.clip();
+      drawContained(ctx, img, x + size * 0.06, y + size * 0.06, size * 0.88, size * 0.88);
+      ctx.restore();
+      tex.needsUpdate = true;
+    })
+    .catch(() => {});
+}
+
 /** Front face of a product box: the product photo on white with a thin brand-coloured band. */
 export function productFace(imageUrl: string | null, color: string) {
   const S = 256;
@@ -49,12 +65,12 @@ export function productFace(imageUrl: string | null, color: string) {
     c.fillStyle = "#ffffff";
     c.fillRect(0, 0, S, S);
     c.fillStyle = color;
-    c.fillRect(0, S - 14, S, 14);
+    c.fillRect(0, S - 12, S, 12);
   });
   if (imageUrl) {
     loadImage(imageUrl)
       .then((img) => {
-        drawContained(ctx, img, 10, 6, S - 20, S - 26);
+        drawContained(ctx, img, 8, 4, S - 16, S - 20);
         tex.needsUpdate = true;
       })
       .catch(() => {});
@@ -62,49 +78,80 @@ export function productFace(imageUrl: string | null, color: string) {
   return tex;
 }
 
-/** Company sign on top of a shelf unit. */
-export function shelfSign(name: string, logoUrl: string | null, color: string, rtl: boolean) {
+/** Back-lit header on top of a company bay: logo and name on the brand colour. */
+export function bayHeader(name: string, logoUrl: string | null, color: string, rtl: boolean) {
   const W = 1024;
-  const H = 160;
-  const logo = 112;
-  const pad = 26;
+  const H = 128;
+  const logo = 96;
+  const pad = 22;
   const { tex, ctx } = canvasTexture(W, H, (c) => {
-    c.fillStyle = color;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, color);
+    g.addColorStop(1, shade(color, -0.18));
+    c.fillStyle = g;
     c.fillRect(0, 0, W, H);
     c.fillStyle = "#ffffff";
     c.textBaseline = "middle";
     c.direction = rtl ? "rtl" : "ltr";
     c.textAlign = rtl ? "right" : "left";
-    const textStart = pad + (logoUrl ? logo + pad : 0);
-    fitText(c, name, W - textStart - pad, 800, 72);
-    c.fillText(name, rtl ? W - textStart : textStart, H / 2 + 4);
+    const start = pad + (logoUrl ? logo + pad : 0);
+    fitText(c, name, W - start - pad, 800, 64);
+    c.fillText(name, rtl ? W - start : start, H / 2 + 3);
   });
-  if (logoUrl) {
-    loadImage(logoUrl)
-      .then((img) => {
-        const x = rtl ? W - pad - logo : pad;
-        const y = (H - logo) / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(x, y, logo, logo, 22);
-        ctx.fillStyle = "#ffffff";
-        ctx.fill();
-        ctx.clip();
-        drawContained(ctx, img, x + 6, y + 6, logo - 12, logo - 12);
-        ctx.restore();
-        tex.needsUpdate = true;
-      })
-      .catch(() => {});
-  }
+  if (logoUrl) drawLogo(ctx, tex, logoUrl, rtl ? W - pad - logo : pad, (H - logo) / 2, logo);
   return tex;
 }
 
-/** Price labels along the front edge of one shelf board. `labels` are positioned at evenly spaced slots. */
+/** Hanging aisle sign: code badge + company name + arrow towards the bay's side. */
+export function aisleSign(code: string, name: string, color: string, arrowRight: boolean, rtl: boolean) {
+  const W = 1024;
+  const H = 200;
+  return canvasTexture(W, H, (c) => {
+    c.fillStyle = "#13241b";
+    c.beginPath();
+    c.roundRect(0, 0, W, H, 28);
+    c.fill();
+    // code badge
+    const bx = rtl ? W - 24 - 170 : 24;
+    c.fillStyle = color;
+    c.beginPath();
+    c.roundRect(bx, 24, 170, H - 48, 20);
+    c.fill();
+    c.fillStyle = "#ffffff";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    fitText(c, code, 140, 800, 92);
+    c.fillText(code, bx + 85, H / 2 + 4);
+    // arrow on the far side from the badge
+    const ax = rtl ? 90 : W - 90;
+    c.save();
+    c.translate(ax, H / 2);
+    if (!arrowRight) c.scale(-1, 1);
+    c.beginPath();
+    c.moveTo(-34, -40);
+    c.lineTo(30, 0);
+    c.lineTo(-34, 40);
+    c.lineWidth = 16;
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    c.strokeStyle = color;
+    c.stroke();
+    c.restore();
+    // name
+    c.direction = rtl ? "rtl" : "ltr";
+    c.textAlign = rtl ? "right" : "left";
+    c.fillStyle = "#ffffff";
+    fitText(c, name, W - 170 - 200, 700, 76);
+    c.fillText(name, rtl ? W - 24 - 170 - 36 : 24 + 170 + 36, H / 2 + 4);
+  }).tex;
+}
+
+/** Price labels along the front edge of one shelf board, one per column. */
 export function priceStrip(labels: (string | null)[], cols: number, rtl: boolean) {
   const W = 1024;
-  const H = 56;
-  const { tex } = canvasTexture(W, H, (c) => {
-    c.fillStyle = "#f7faf8";
+  const H = 48;
+  return canvasTexture(W, H, (c) => {
+    c.fillStyle = "#ffffff";
     c.fillRect(0, 0, W, H);
     c.textAlign = "center";
     c.textBaseline = "middle";
@@ -113,23 +160,19 @@ export function priceStrip(labels: (string | null)[], cols: number, rtl: boolean
     labels.forEach((label, i) => {
       if (!label) return;
       const cx = rtl ? W - (i + 0.5) * step : (i + 0.5) * step;
-      c.fillStyle = "#ffffff";
-      c.strokeStyle = "#d9ece1";
-      c.lineWidth = 3;
+      c.fillStyle = "#fff6d6";
       c.beginPath();
-      c.roundRect(cx - step / 2 + 14, 6, step - 28, H - 12, 10);
+      c.roundRect(cx - step / 2 + 10, 5, step - 20, H - 10, 6);
       c.fill();
-      c.stroke();
-      c.fillStyle = "#0b5d34";
-      fitText(c, label, step - 48, 800, 30);
+      c.fillStyle = "#13241b";
+      fitText(c, label, step - 36, 800, 28);
       c.fillText(label, cx, H / 2 + 1);
     });
-  });
-  return tex;
+  }).tex;
 }
 
-/** A large wall or counter sign: bold text on a coloured background. */
-export function textSign(text: string, bg: string, fg: string, w = 1024, h = 220, size = 96) {
+/** A plain sign: bold text on a coloured background. */
+export function textSign(text: string, bg: string, fg: string, w = 1024, h = 200, size = 96) {
   return canvasTexture(w, h, (c) => {
     c.fillStyle = bg;
     c.fillRect(0, 0, w, h);
@@ -141,29 +184,48 @@ export function textSign(text: string, bg: string, fg: string, w = 1024, h = 220
   }).tex;
 }
 
-/** Light floor tiles, repeated across the floor plane. */
+/** Polished warehouse floor: large pale tiles with a faint seam. */
 export function floorTiles() {
   const S = 256;
   const { tex } = canvasTexture(S, S, (c) => {
-    c.fillStyle = "#f3f6f4";
+    c.fillStyle = "#eef1ef";
     c.fillRect(0, 0, S, S);
-    c.strokeStyle = "#e1e8e4";
-    c.lineWidth = 4;
+    c.strokeStyle = "#dde3df";
+    c.lineWidth = 3;
     c.strokeRect(0, 0, S, S);
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
 }
 
-/** Soft round shadow used under the cart and shelf units. */
+/** Wire mesh used for the shopping cart basket (transparent between the wires). */
+export function wireMesh() {
+  const S = 128;
+  const { tex } = canvasTexture(S, S, (c) => {
+    c.clearRect(0, 0, S, S);
+    c.strokeStyle = "#ffffff";
+    c.lineWidth = 7;
+    c.strokeRect(0, 0, S, S);
+  });
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+/** Soft round shadow, used under the cart and gondolas instead of real-time shadows. */
 export function softShadow() {
   const S = 128;
   const { tex } = canvasTexture(S, S, (c) => {
     const g = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-    g.addColorStop(0, "rgba(16,40,28,0.35)");
+    g.addColorStop(0, "rgba(16,40,28,0.32)");
     g.addColorStop(1, "rgba(16,40,28,0)");
     c.fillStyle = g;
     c.fillRect(0, 0, S, S);
   });
   return tex;
+}
+
+/** Lightens (amount > 0) or darkens (amount < 0) a hex colour. */
+export function shade(hex: string, amount: number) {
+  const c = new THREE.Color(hex);
+  return "#" + c.lerp(new THREE.Color(amount > 0 ? "#ffffff" : "#000000"), Math.abs(amount)).getHexString();
 }
