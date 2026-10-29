@@ -76,7 +76,7 @@ export function poseFor(stop: number, bays: number, rtl: boolean, wide: boolean)
   if (stop <= 0) return { x: 0, z: 3.4, yaw: 0, pitch: -0.06, lateral: 0 };
   // At checkout, wide screens step aside so the counter isn't hidden behind the receipt panel (on the end side).
   // On phones the receipt covers the lower screen, so stand closer and look down so the pharmacist shows above it.
-  if (stop > bays) return wide ? { x: rtl ? -0.9 : 0.9, z: checkoutZ(bays) + 4.4, yaw: 0, pitch: -0.1, lateral: 0 } : { x: 0, z: checkoutZ(bays) + 3.0, yaw: 0, pitch: -0.32, lateral: 0 };
+  if (stop > bays) return wide ? { x: rtl ? -0.9 : 0.9, z: checkoutZ(bays) + 3.7, yaw: 0, pitch: -0.08, lateral: 0 } : { x: 0, z: checkoutZ(bays) + 3.0, yaw: 0, pitch: -0.32, lateral: 0 };
 
   const i = stop - 1;
   const side = sideOf(i, rtl);
