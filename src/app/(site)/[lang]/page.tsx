@@ -89,6 +89,37 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
         </section>
       )}
 
+      {/* 3D store promo */}
+      <section className="container-x mt-12">
+        <Link
+          href={`/${lang}/store`}
+          className="group relative grid items-center gap-6 overflow-hidden rounded-3xl bg-brand-800 p-6 text-white sm:p-10 lg:grid-cols-[1fr_auto]"
+        >
+          <div className="relative max-w-xl">
+            <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wider">{t.store.promoEyebrow}</span>
+            <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">{t.store.promoTitle}</h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-white/80">{t.store.promoBody}</p>
+            <span className="mt-6 inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 font-semibold text-brand-800 transition-colors group-hover:bg-brand-50">
+              {t.store.promoCta} <Arrow lang={lang} />
+            </span>
+          </div>
+          {/* a row of mini shelves, one per company, in each company's colour */}
+          <div className="relative flex items-end gap-3" aria-hidden>
+            {activeCompanies.slice(0, 6).map((c, i) => (
+              <div key={c.id} className="w-14 rounded-t-lg bg-white/10 p-1.5 transition-transform duration-300 group-hover:-translate-y-1 sm:w-16" style={{ transitionDelay: `${i * 40}ms` }}>
+                <div className="mb-1.5 h-2.5 rounded-sm" style={{ background: c.brand_color }} />
+                {[0, 1, 2].map((row) => (
+                  <div key={row} className="mb-1 flex gap-1 border-b-2 border-white/25 pb-1">
+                    <span className="h-3 flex-1 rounded-sm bg-white/70" />
+                    <span className="h-3 flex-1 rounded-sm" style={{ background: c.brand_color }} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </Link>
+      </section>
+
       <section className="container-x mt-10">
         <FeaturesStrip t={t} settings={settings} />
       </section>
