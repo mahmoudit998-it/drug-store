@@ -3,6 +3,7 @@
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { BOX, COLS, GONDOLA, ROWS, ROW_Y, SLOTS, aisleCode, gondolaFrame, sideOf, slotLocal, slotRow, zoneZ } from "./layout";
 import { GondolaFrame } from "./environment";
 import { aisleSign, bayHeader, priceStrip, shade } from "./textures";
@@ -94,6 +95,8 @@ export function CompanyBay({ shelf, index, rtl, faces, price, selectedSlot, onPi
   );
 }
 
+// Slightly rounded packs; the geometry keeps the box's six material groups (front face = 4).
+const packGeometry = new RoundedBoxGeometry(BOX.w, BOX.h, BOX.d, 2, 0.016);
 const outlineGeometry = new THREE.BoxGeometry(BOX.w, BOX.h, BOX.d);
 
 function ProductBox({
@@ -160,13 +163,13 @@ function ProductBox({
         onPointerOver={over}
         onPointerMove={(e) => onHover(true, e.nativeEvent.clientX, e.nativeEvent.clientY)}
         onPointerOut={out}
+        geometry={packGeometry}
       >
-        <boxGeometry args={[BOX.w, BOX.h, BOX.d]} />
         <meshStandardMaterial attach="material-0" color={sideColor} />
         <meshStandardMaterial attach="material-1" color={sideColor} />
         <meshStandardMaterial attach="material-2" color={sideColor} />
         <meshStandardMaterial attach="material-3" color={sideColor} />
-        <meshStandardMaterial attach="material-4" map={face} color={tint} roughness={0.55} />
+        <meshStandardMaterial attach="material-4" map={face} color={tint} roughness={0.4} />
         <meshStandardMaterial attach="material-5" color={sideColor} />
       </mesh>
       {/* outline: a slightly larger back-faced box in the brand colour */}
@@ -217,8 +220,7 @@ export function FlyingBox({
   });
 
   return (
-    <mesh ref={ref} position={origin}>
-      <boxGeometry args={[BOX.w, BOX.h, BOX.d]} />
+    <mesh ref={ref} position={origin} geometry={packGeometry}>
       <meshStandardMaterial attach="material-0" color={color} />
       <meshStandardMaterial attach="material-1" color={color} />
       <meshStandardMaterial attach="material-2" color={color} />

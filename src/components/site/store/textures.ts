@@ -13,17 +13,17 @@ function canvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2
   draw(ctx);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   return { tex, ctx };
 }
 
-function loadImage(src: string) {
+function loadImage(src: string, w = 256) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.decoding = "async";
     img.onload = () => resolve(img);
     img.onerror = reject;
-    img.src = optimized(src);
+    img.src = optimized(src, w);
   });
 }
 
@@ -43,7 +43,7 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, weig
 }
 
 function drawLogo(ctx: CanvasRenderingContext2D, tex: THREE.Texture, url: string, x: number, y: number, size: number) {
-  loadImage(url)
+  loadImage(url, size > 128 ? 256 : 128)
     .then((img) => {
       ctx.save();
       ctx.beginPath();
@@ -60,17 +60,18 @@ function drawLogo(ctx: CanvasRenderingContext2D, tex: THREE.Texture, url: string
 
 /** Front face of a product box: the product photo on white with a thin brand-coloured band. */
 export function productFace(imageUrl: string | null, color: string) {
-  const S = 256;
+  const S = 512;
   const { tex, ctx } = canvasTexture(S, S, (c) => {
     c.fillStyle = "#ffffff";
     c.fillRect(0, 0, S, S);
     c.fillStyle = color;
-    c.fillRect(0, S - 12, S, 12);
+    c.fillRect(0, S - 24, S, 24);
   });
   if (imageUrl) {
-    loadImage(imageUrl)
+    // 640 is the smallest optimizer width above the 512px canvas
+    loadImage(imageUrl, 640)
       .then((img) => {
-        drawContained(ctx, img, 8, 4, S - 16, S - 20);
+        drawContained(ctx, img, 16, 8, S - 32, S - 40);
         tex.needsUpdate = true;
       })
       .catch(() => {});
@@ -80,10 +81,10 @@ export function productFace(imageUrl: string | null, color: string) {
 
 /** Back-lit header on top of a company bay: logo and name on the brand colour. */
 export function bayHeader(name: string, logoUrl: string | null, color: string, rtl: boolean) {
-  const W = 1024;
-  const H = 128;
-  const logo = 96;
-  const pad = 22;
+  const W = 2048;
+  const H = 256;
+  const logo = 192;
+  const pad = 44;
   const { tex, ctx } = canvasTexture(W, H, (c) => {
     const g = c.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, color);
@@ -95,8 +96,8 @@ export function bayHeader(name: string, logoUrl: string | null, color: string, r
     c.direction = rtl ? "rtl" : "ltr";
     c.textAlign = rtl ? "right" : "left";
     const start = pad + (logoUrl ? logo + pad : 0);
-    fitText(c, name, W - start - pad, 800, 64);
-    c.fillText(name, rtl ? W - start : start, H / 2 + 3);
+    fitText(c, name, W - start - pad, 800, 128);
+    c.fillText(name, rtl ? W - start : start, H / 2 + 6);
   });
   if (logoUrl) drawLogo(ctx, tex, logoUrl, rtl ? W - pad - logo : pad, (H - logo) / 2, logo);
   return tex;
@@ -106,7 +107,9 @@ export function bayHeader(name: string, logoUrl: string | null, color: string, r
 export function aisleSign(code: string, name: string, color: string, arrowRight: boolean, rtl: boolean) {
   const W = 1024;
   const H = 200;
-  return canvasTexture(W, H, (c) => {
+  // drawn at 2x for sharpness
+  return canvasTexture(W * 2, H * 2, (c) => {
+    c.scale(2, 2);
     c.fillStyle = "#13241b";
     c.beginPath();
     c.roundRect(0, 0, W, H, 28);
@@ -150,7 +153,8 @@ export function aisleSign(code: string, name: string, color: string, arrowRight:
 export function priceStrip(labels: (string | null)[], cols: number, rtl: boolean) {
   const W = 1024;
   const H = 48;
-  return canvasTexture(W, H, (c) => {
+  return canvasTexture(W * 2, H * 2, (c) => {
+    c.scale(2, 2);
     c.fillStyle = "#ffffff";
     c.fillRect(0, 0, W, H);
     c.textAlign = "center";
@@ -173,7 +177,8 @@ export function priceStrip(labels: (string | null)[], cols: number, rtl: boolean
 
 /** A plain sign: bold text on a coloured background. */
 export function textSign(text: string, bg: string, fg: string, w = 1024, h = 200, size = 96) {
-  return canvasTexture(w, h, (c) => {
+  return canvasTexture(w * 2, h * 2, (c) => {
+    c.scale(2, 2);
     c.fillStyle = bg;
     c.fillRect(0, 0, w, h);
     c.fillStyle = fg;
@@ -209,6 +214,22 @@ export function wireMesh() {
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
+}
+
+let baseShadowTex: THREE.Texture | null = null;
+
+/** Shared gradient strip: dark at a shelf's base, fading out across the floor. */
+export function baseShadow() {
+  if (!baseShadowTex) {
+    baseShadowTex = canvasTexture(4, 64, (c) => {
+      const g = c.createLinearGradient(0, 0, 0, 64);
+      g.addColorStop(0, "rgba(16,40,28,0)");
+      g.addColorStop(1, "rgba(16,40,28,0.28)");
+      c.fillStyle = g;
+      c.fillRect(0, 0, 4, 64);
+    }).tex;
+  }
+  return baseShadowTex;
 }
 
 /** Soft round shadow, used under the cart and gondolas instead of real-time shadows. */

@@ -1,9 +1,11 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import { SLOTS, slotWorld } from "./layout";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { SLOTS, checkoutZ, slotWorld, stopCount } from "./layout";
+import { Pharmacist } from "./character";
 import { productFace } from "./textures";
 import { CompanyBay, FlyingBox, type HoverHandler } from "./bay";
 import { ShoppingCart } from "./cart-model";
@@ -32,10 +34,68 @@ const FOG = "#edf3ef";
 
 export default function StoreScene(props: SceneProps) {
   return (
-    <Canvas dpr={[1, 1.5]} gl={{ antialias: true, powerPreference: "high-performance" }} camera={{ fov: 52, near: 0.05, far: 60, position: [0, 1.6, 4] }} aria-hidden>
+    <Canvas dpr={[1, 2]} gl={{ antialias: true, powerPreference: "high-performance" }} camera={{ fov: 52, near: 0.05, far: 60, position: [0, 1.6, 4] }} aria-hidden>
+      <AdaptiveResolution />
+      <StudioLighting />
       <World {...props} />
     </Canvas>
   );
+}
+
+/**
+ * Starts at the screen's full sharpness (up to 2x) and steps the render resolution down
+ * if the device can't keep a smooth frame rate, then back up once it recovers.
+ */
+function AdaptiveResolution() {
+  const setDpr = useThree((s) => s.setDpr);
+  const levels = useMemo(() => {
+    const max = Math.min(2, window.devicePixelRatio || 1);
+    return [...new Set([max, Math.max(1, max * 0.8), Math.max(1, max * 0.65), 1])];
+  }, []);
+  const st = useRef({ level: 0, frames: 0, time: 0, good: 0, raises: 0 });
+
+  useEffect(() => setDpr(levels[0]), [setDpr, levels]);
+
+  useFrame((_, delta) => {
+    const s = st.current;
+    if (delta > 0.25) return; // tab was hidden or the page stalled; not a real frame time
+    s.frames++;
+    s.time += delta;
+    if (s.time < 1) return;
+    const fps = s.frames / s.time;
+    s.frames = 0;
+    s.time = 0;
+    if (fps < 48 && s.level < levels.length - 1) {
+      setDpr(levels[++s.level]);
+      s.good = 0;
+    } else if (fps > 58 && s.level > 0 && s.raises < 2) {
+      // only a couple of raises, so a borderline device doesn't keep flipping
+      if (++s.good >= 4) {
+        setDpr(levels[--s.level]);
+        s.good = 0;
+        s.raises++;
+      }
+    } else s.good = 0;
+  });
+  return null;
+}
+
+/** Soft image-based lighting from a generated room, computed once; gives materials realistic sheen. */
+function StudioLighting() {
+  const get = useThree((s) => s.get);
+  useEffect(() => {
+    const { gl, scene } = get();
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = env;
+    scene.environmentIntensity = 0.55;
+    pmrem.dispose();
+    return () => {
+      scene.environment = null;
+      env.dispose();
+    };
+  }, [get]);
+  return null;
 }
 
 function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onFlightDone, basket, reducedMotion, labels, price }: SceneProps) {
@@ -87,6 +147,8 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
           onDone={() => onFlightDone(f.key)}
         />
       ))}
+
+      <Pharmacist position={[-0.05, 0, checkoutZ(shelves.length) - 0.8]} progress={progress} arriveAt={stopCount(shelves.length) - 1.15} reducedMotion={reducedMotion} />
 
       <CameraRig bays={shelves.length} rtl={rtl} progress={progress} cartRef={cartRef} reducedMotion={reducedMotion} />
     </>

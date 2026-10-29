@@ -37,15 +37,21 @@ export function ProductDrawer({
       aria-label={name}
       className="absolute inset-x-0 bottom-0 z-20 max-h-[78dvh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-lift sm:inset-x-auto sm:inset-y-20 sm:bottom-auto sm:end-4 sm:h-fit sm:max-h-[calc(100dvh-10rem)] sm:w-[380px] sm:rounded-3xl"
     >
-      <button type="button" onClick={onClose} aria-label={t.store.close} className="absolute end-3 top-3 grid size-9 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={t.store.close}
+        className="absolute end-7 top-7 z-10 grid size-9 place-items-center rounded-full bg-white/90 text-muted shadow-sm hover:bg-surface hover:text-ink"
+      >
         <X className="size-5" />
       </button>
 
-      <div className="flex gap-4 sm:block">
-        <div className="relative size-24 shrink-0 overflow-hidden rounded-2xl border border-line bg-white sm:mb-4 sm:h-44 sm:w-full">
-          {p.image_url && <Image src={p.image_url} alt="" fill sizes="(min-width: 640px) 340px, 96px" className="object-contain p-2" />}
+      <div>
+        <div className="relative mb-4 h-48 w-full overflow-hidden rounded-2xl border border-line bg-white sm:h-60">
+          {p.image_url && <Image src={p.image_url} alt={name} fill sizes="(min-width: 640px) 340px, 100vw" className="object-contain p-3" />}
+          {p.requires_prescription && <span className="absolute start-3 top-3 rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white">Rx</span>}
         </div>
-        <div className="min-w-0 pe-8 sm:pe-0">
+        <div className="min-w-0">
           <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: shelf.brand_color }}>
             {tr(shelf, "name", lang)}
           </p>

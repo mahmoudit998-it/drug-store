@@ -190,9 +190,14 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
         {/* hover tooltip, positioned at the pointer */}
         <div ref={tooltipRef} className="pointer-events-none fixed z-30" style={{ left: 0, top: 0, visibility: tip ? "visible" : "hidden" }}>
           {tip && (
-            <div className="max-w-56 rounded-xl bg-ink/90 px-3 py-2 text-white shadow-lift backdrop-blur">
-              <p className="line-clamp-2 text-[13px] font-semibold leading-snug">{tr(tip, "name", lang)}</p>
-              <p className="mt-0.5 text-[13px] font-extrabold text-brand-200">{money(tip.price, lang)}</p>
+            <div className="flex w-64 items-center gap-3 rounded-xl bg-ink/90 p-2 pe-3 text-white shadow-lift backdrop-blur">
+              <span className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-white">
+                {tip.image_url && <Image src={tip.image_url} alt="" fill sizes="56px" className="object-contain" />}
+              </span>
+              <span className="min-w-0">
+                <span className="line-clamp-2 text-[13px] font-semibold leading-snug">{tr(tip, "name", lang)}</span>
+                <span className="mt-0.5 block text-[13px] font-extrabold text-brand-200">{money(tip.price, lang)}</span>
+              </span>
             </div>
           )}
         </div>

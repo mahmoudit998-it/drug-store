@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { AISLE_HALF, BOX, GONDOLA, ROWS, ROW_Y, SLOTS, TOP_BOARD, checkoutZ, gondolaFrame, sideOf, slotLocal, zoneZ } from "./layout";
-import { floorTiles, softShadow, textSign } from "./textures";
+import { baseShadow, floorTiles, softShadow, textSign } from "./textures";
 
 const BRAND = "#0b5d34";
 const MINT = "#e6f0ea";
@@ -36,6 +36,11 @@ export function GondolaFrame({ color, accent }: { color: string; accent?: string
           <meshStandardMaterial color="#f4f7f5" roughness={0.6} />
         </mesh>
       ))}
+      {/* baked contact shadow on the floor along the front */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.003, d / 2 + 0.2]}>
+        <planeGeometry args={[len + 0.3, 0.5]} />
+        <meshBasicMaterial map={baseShadow()} transparent depthWrite={false} />
+      </mesh>
       {/* kick plate */}
       <mesh position={[0, 0.17, 0.01]}>
         <boxGeometry args={[len - 0.04, 0.34, d - 0.02]} />
@@ -132,14 +137,14 @@ export function Warehouse({ bays, rtl, storeName, checkout }: { bays: number; rt
 
   return (
     <group>
-      <hemisphereLight args={["#ffffff", "#d9e4dd", 1.35]} />
+      <hemisphereLight args={["#ffffff", "#d9e4dd", 1.0]} />
       <directionalLight position={[3, 8, 4]} intensity={1.15} />
       <directionalLight position={[-4, 6, -8]} intensity={0.5} />
 
       {/* floor, guide line, ceiling */}
       <mesh rotation-x={-Math.PI / 2} position={[0, 0, midZ]}>
         <planeGeometry args={[width, length]} />
-        <meshStandardMaterial map={floor} roughness={0.35} metalness={0.05} />
+        <meshStandardMaterial map={floor} roughness={0.22} metalness={0.05} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[0, 0.003, (1 + cz + 1.5) / 2]}>
         <planeGeometry args={[0.07, 1 - (cz + 1.5)]} />
