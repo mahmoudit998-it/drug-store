@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #eef6f1;
+  --color-brand-100: #d9ece1;
+  --color-brand-200: #b3d8c3;
+  --color-brand-500: #0d7a45;
+  --color-brand-600: #006e3a;
+  --color-brand-700: #0b5d34;
+  --color-brand-800: #0a4a2a;
+  --color-brand-900: #07361f;
+  --color-ink: #13241b;
+  --color-muted: #5b6d64;
+  --color-line: #e2eae5;
+  --color-surface: #f4f8f6;
+  --color-star: #f5a524;
+
+  --font-sans: var(--font-jakarta), var(--font-plex-ar), ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: var(--font-plex-ar), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-card: 0 1px 2px rgb(16 40 28 / 0.04), 0 4px 16px rgb(16 40 28 / 0.06);
+  --shadow-lift: 0 8px 28px rgb(16 40 28 / 0.12);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  html[dir="rtl"] body {
+    font-family: var(--font-arabic);
+  }
+  body {
+    @apply bg-white text-ink antialiased;
+  }
+  ::selection {
+    @apply bg-brand-200;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+}
+
+@utility container-x {
+  @apply mx-auto w-full max-w-[1280px] px-4 sm:px-6 lg:px-8;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
