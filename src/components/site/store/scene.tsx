@@ -11,6 +11,7 @@ import { CompanyBay, FlyingBox, type HoverHandler } from "./bay";
 import { ShoppingCart } from "./cart-model";
 import { Warehouse } from "./environment";
 import { CameraRig } from "./rig";
+import { Shopper } from "./shopper";
 import type { Flight, Pick, StoreShelf } from "./types";
 
 export type SceneProps = {
@@ -100,6 +101,7 @@ function StudioLighting() {
 
 function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onFlightDone, basket, reducedMotion, labels, price }: SceneProps) {
   const cartRef = useRef<THREE.Group>(null);
+  const shopperRef = useRef<THREE.Group>(null);
 
   // One face texture per product, shared by its shelf box and any flying copy.
   const faces = useMemo(
@@ -134,6 +136,7 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
         />
       ))}
 
+      <Shopper ref={shopperRef} />
       <ShoppingCart ref={cartRef} items={basket.slice(0, Math.max(0, basket.length - flights.length))} />
 
       {flights.map((f) => (
@@ -150,7 +153,7 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
 
       <Pharmacist position={[-0.05, 0, checkoutZ(shelves.length) - 0.8]} progress={progress} arriveAt={stopCount(shelves.length) - 1.15} reducedMotion={reducedMotion} />
 
-      <CameraRig bays={shelves.length} rtl={rtl} progress={progress} cartRef={cartRef} reducedMotion={reducedMotion} />
+      <CameraRig bays={shelves.length} rtl={rtl} progress={progress} cartRef={cartRef} shopperRef={shopperRef} reducedMotion={reducedMotion} />
     </>
   );
 }

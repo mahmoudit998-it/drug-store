@@ -60,10 +60,11 @@ export function slotWorld(bay: number, slot: number, rtl: boolean, count: number
 }
 
 /**
- * A resting pose of the shopper. `yaw`/`pitch` are the head (camera) angles; `lateral`
- * slides the parked cart sideways (camera-right positive) so it doesn't hide the shelf.
+ * A resting camera pose. `yaw`/`pitch` are the camera angles. The shopper (with the cart)
+ * stands `ahead` metres in front of the camera and `lateral` to the side (camera-right
+ * positive), so at a bay the camera looks over their shoulder at the shelf.
  */
-export type Pose = { x: number; z: number; yaw: number; pitch: number; lateral: number };
+export type Pose = { x: number; z: number; yaw: number; pitch: number; lateral: number; ahead: number };
 
 /** Yaw that makes a camera at (x, z) face (tx, tz). Three.js cameras look down -Z at yaw 0. */
 const yawTo = (x: number, z: number, tx: number, tz: number) => Math.atan2(-(tx - x), -(tz - z));
@@ -73,10 +74,14 @@ const yawTo = (x: number, z: number, tx: number, tz: number) => Math.atan2(-(tx 
  * further back along the aisle and look at the bay at an angle, so the whole bay still fits.
  */
 export function poseFor(stop: number, bays: number, rtl: boolean, wide: boolean): Pose {
-  if (stop <= 0) return { x: 0, z: 3.4, yaw: 0, pitch: -0.06, lateral: 0 };
+  if (stop <= 0) return { x: 0, z: 3.4, yaw: 0, pitch: -0.1, lateral: 0, ahead: 3.0 };
   // At checkout, wide screens step aside so the counter isn't hidden behind the receipt panel (on the end side).
   // On phones the receipt covers the lower screen, so stand closer and look down so the pharmacist shows above it.
-  if (stop > bays) return wide ? { x: rtl ? -0.9 : 0.9, z: checkoutZ(bays) + 3.7, yaw: 0, pitch: -0.08, lateral: 0 } : { x: 0, z: checkoutZ(bays) + 3.0, yaw: 0, pitch: -0.32, lateral: 0 };
+  // The shopper stands to the side away from the receipt so the pharmacist stays in view.
+  if (stop > bays)
+    return wide
+      ? { x: rtl ? -0.9 : 0.9, z: checkoutZ(bays) + 3.7, yaw: 0, pitch: -0.08, lateral: rtl ? 0.95 : -0.95, ahead: 1.7 }
+      : { x: 0, z: checkoutZ(bays) + 3.0, yaw: 0, pitch: -0.32, lateral: 0.55, ahead: 1.3 };
 
   const i = stop - 1;
   const side = sideOf(i, rtl);
@@ -86,14 +91,14 @@ export function poseFor(stop: number, bays: number, rtl: boolean, wide: boolean)
     const x = -side * 1.7;
     const cz = z + 1.0;
     const dist = Math.hypot(tx - x, cz - z);
-    return { x, z: cz, yaw: yawTo(x, cz, tx, z), pitch: -Math.atan((EYE - 1.5) / dist), lateral: -side * 0.95 };
+    return { x, z: cz, yaw: yawTo(x, cz, tx, z), pitch: -Math.atan((EYE - 1.5) / dist), lateral: -side * 1.1, ahead: 2.0 };
   }
   // Narrow: aim halfway between the bay's two ends so the whole (foreshortened) bay fits.
   const x = -side * 1.7;
   const cz = z + 3.6;
   const half = GONDOLA.len / 2;
   const yaw = (yawTo(x, cz, tx, z + half) + yawTo(x, cz, tx, z - half)) / 2;
-  return { x, z: cz, yaw, pitch: -0.04, lateral: -side * 0.6 };
+  return { x, z: cz, yaw, pitch: -0.04, lateral: -side * 0.8, ahead: 1.4 };
 }
 
 /**
