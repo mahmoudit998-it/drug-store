@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { Globe, Menu, X } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 
-type NavItem = { href: string; label: string; exact?: boolean };
+// wideOnly: hidden in the desktop bar below xl so the row fits; always listed in the mobile menu
+type NavItem = { href: string; label: string; exact?: boolean; wideOnly?: boolean };
 
 function useIsActive() {
   const pathname = usePathname();
@@ -31,7 +32,7 @@ export function NavLinks({ nav }: { nav: NavItem[] }) {
       {nav.map((n) => {
         const active = isActive(n);
         return (
-          <li key={n.href} className="flex">
+          <li key={n.href} className={n.wideOnly ? "hidden xl:flex" : "flex"}>
             <Link
               href={n.href}
               aria-current={active ? "page" : undefined}

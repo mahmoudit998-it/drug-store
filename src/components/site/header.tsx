@@ -16,7 +16,7 @@ export function Header({ lang, t, settings, categories }: Props) {
     { href: `/${lang}`, label: t.nav.home, exact: true },
     { href: `/${lang}/products`, label: t.nav.products },
     { href: `/${lang}/store`, label: t.nav.store },
-    ...categories.slice(0, 5).map((c) => ({ href: `/${lang}/products?category=${c.slug}`, label: tr(c, "name", lang) })),
+    ...categories.slice(0, 5).map((c) => ({ href: `/${lang}/products?category=${c.slug}`, label: tr(c, "name", lang), wideOnly: true })),
     { href: `/${lang}/companies`, label: t.nav.companies },
     { href: `/${lang}/products?sale=1`, label: t.nav.offers },
     { href: `/${lang}/about`, label: t.nav.about },
