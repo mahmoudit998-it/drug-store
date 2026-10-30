@@ -263,8 +263,8 @@ export function Pharmacist({
               <meshStandardMaterial color={HAIR} roughness={0.95} />
             </mesh>
             {/* sides and back down to ear level, open at the face */}
-            <mesh position={[0, 0.008, -0.002]} scale={[0.88, 1.0, 1.04]}>
-              <sphereGeometry args={[0.112, 40, 10, Math.PI * 0.9, Math.PI * 1.2, Math.PI * 0.26, Math.PI * 0.26]} />
+            <mesh position={[0, 0.008, -0.002]} scale={[0.88, 1.22, 1.04]}>
+              <sphereGeometry args={[0.112, 40, 10, Math.PI * 0.9, Math.PI * 1.2, Math.PI * 0.27, Math.PI * 0.33]} />
               <meshStandardMaterial color={HAIR} roughness={0.95} side={THREE.DoubleSide} />
             </mesh>
             {/* nape */}

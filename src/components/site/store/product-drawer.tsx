@@ -38,6 +38,7 @@ export function ProductDrawer({
   return (
     <div
       role="dialog"
+      data-lenis-prevent
       aria-modal="false"
       aria-label={name}
       className="absolute inset-x-0 bottom-0 z-20 max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-4 shadow-lift sm:inset-x-auto sm:inset-y-20 sm:bottom-auto sm:end-4 sm:h-fit sm:max-h-[calc(100dvh-10rem)] sm:w-[380px] sm:rounded-3xl sm:p-5"

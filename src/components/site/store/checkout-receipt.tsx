@@ -30,6 +30,7 @@ export function CheckoutReceipt({ lang, t, whatsapp, freeMin }: { lang: Locale; 
   return (
     <section
       aria-label={s.receipt}
+      data-lenis-prevent
       className="absolute inset-x-0 bottom-0 z-20 max-h-[72dvh] overflow-y-auto rounded-t-3xl bg-white shadow-lift sm:inset-x-auto sm:bottom-auto sm:end-4 sm:top-20 sm:max-h-[calc(100dvh-7rem)] sm:w-[400px] sm:rounded-3xl"
     >
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-dashed border-line bg-white px-5 py-4">
