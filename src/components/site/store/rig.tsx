@@ -8,31 +8,27 @@ import { EYE, poseFor, stopCount, type Pose } from "./layout";
 type Path = { wide: boolean; poses: Pose[]; curve: THREE.CatmullRomCurve3 };
 
 /**
- * Moves the shopper and camera along the aisle from the scroll position. Everything follows
- * one Catmull-Rom spline through every stop. While walking, the camera follows behind and
- * above the shopper pushing the cart; at each stop the shopper steps aside and the camera
- * looks over their shoulder at the bay.
+ * Moves the shopper along the aisle from the scroll position. The body follows one
+ * Catmull-Rom spline through every stop; the head turns towards the bay at each stop
+ * and back down the aisle while walking. The cart is pushed in front of the shopper.
  */
 export function CameraRig({
   bays,
   rtl,
   progress,
   cartRef,
-  shopperRef,
   reducedMotion,
 }: {
   bays: number;
   rtl: boolean;
   progress: RefObject<number>;
   cartRef: RefObject<THREE.Group | null>;
-  shopperRef: RefObject<THREE.Group | null>;
   reducedMotion: boolean;
 }) {
   const path = useRef<Path | null>(null);
   // One smoothed walk position drives everything, so position, head turn and cart stay in step.
   const walk = useRef({ p: 0, v: 0, started: false, walked: 0, x: 0, z: 0 });
   const point = useRef(new THREE.Vector3());
-  const tangent = useRef(new THREE.Vector3());
 
   useFrame((state, rawDelta) => {
     const camera = state.camera as THREE.PerspectiveCamera;
@@ -76,57 +72,32 @@ export function CameraRig({
     // getPoint spaces stops evenly in t, so pos / (stops - 1) lands exactly on each stop.
     curve.getPoint(pos / (stops - 1), point.current);
 
-    // `rest` is 1 standing at a stop and 0 mid-walk.
+    // Ease the head turn: look down the aisle while walking, at the bay when standing.
     const te = t * t * (3 - 2 * t);
     const travel = Math.sin(Math.PI * t);
-    const rest = 1 - travel;
-    const lerp = (x: number, y: number) => x + (y - x) * te;
+    const yaw = (a.yaw + (b.yaw - a.yaw) * te) * (1 - 0.8 * travel);
+    const pitch = a.pitch + (b.pitch - a.pitch) * te - 0.1 * travel;
+    const lateral = (a.lateral + (b.lateral - a.lateral) * te) * (1 - travel);
 
-    // Heading of the walk (the spline's direction), and the camera's resting view.
-    curve.getTangent(Math.min(0.999, Math.max(0.001, pos / (stops - 1))), tangent.current);
-    const heading = Math.atan2(-tangent.current.x, -tangent.current.z);
-    const viewYaw = lerp(a.yaw, b.yaw) * (1 - 0.8 * travel);
-    const viewPitch = lerp(a.pitch, b.pitch);
-
-    // Shopper: ahead of the camera anchor and to the side at a stop, on the path while walking.
-    const lat = lerp(a.lateral, b.lateral) * rest;
-    const ahead = lerp(a.ahead, b.ahead);
-    const sx = point.current.x + lat * Math.cos(viewYaw) - ahead * Math.sin(viewYaw);
-    const sz = point.current.z - lat * Math.sin(viewYaw) - ahead * Math.cos(viewYaw);
-    // Body faces the walk; standing, it turns part-way to the shelf and the head the rest.
-    const bodyYaw = heading * travel + viewYaw * 0.5 * rest;
-
-    const step = Math.hypot(sx - w.x, sz - w.z);
-    w.x = sx;
-    w.z = sz;
+    const step = Math.hypot(point.current.x - w.x, point.current.z - w.z);
+    w.x = point.current.x;
+    w.z = point.current.z;
     w.walked += step;
-    const speed = Math.min(1, Math.abs(w.v) * 2.2);
 
-    // Camera: over the shoulder when standing, behind and above the shopper while walking.
-    const backX = sx + 2.5 * Math.sin(heading);
-    const backZ = sz + 2.5 * Math.cos(heading);
-    const camX = point.current.x * rest + backX * travel;
-    const camZ = point.current.z * rest + backZ * travel;
-    const bob = reducedMotion ? 0 : Math.sin(w.walked * 4.8) * speed * 0.008;
-    camera.position.set(camX, EYE + 0.62 * travel + bob, camZ);
-    camera.rotation.set(viewPitch * rest - 0.24 * travel, viewYaw * rest + heading * travel, 0, "YXZ");
-
-    const shopper = shopperRef.current;
-    if (shopper) {
-      shopper.position.set(sx, 0, sz);
-      shopper.rotation.y = bodyYaw;
-      shopper.userData.motion = {
-        phase: (w.walked / 1.35) * Math.PI * 2, // one stride per 1.35 m
-        amount: reducedMotion ? 0 : speed,
-        look: (viewYaw - bodyYaw) * rest,
-      };
-    }
+    // gentle head bob, scaled by walking speed
+    const speed = Math.min(1, Math.abs(w.v) * 1.5);
+    const bob = reducedMotion ? 0 : Math.sin(w.walked * 5.2) * speed * 0.012;
+    camera.position.set(w.x, EYE + bob, w.z);
+    camera.rotation.set(pitch, yaw, 0, "YXZ");
 
     const cart = cartRef.current;
     if (cart) {
-      // The cart's handle sits in the shopper's hands, 0.55 m ahead of their feet.
-      cart.position.set(sx - 0.55 * Math.sin(bodyYaw), 0, sz - 0.55 * Math.cos(bodyYaw));
-      cart.rotation.y = bodyYaw;
+      // Pushed 1.25 m ahead, slid sideways when parked, turned less than the head.
+      const cos = Math.cos(yaw);
+      const sin = Math.sin(yaw);
+      const lz = -1.25;
+      cart.position.set(w.x + lateral * cos + lz * sin, 0, w.z - lateral * sin + lz * cos);
+      cart.rotation.y = yaw * 0.45;
       cart.userData.spin = (cart.userData.spin ?? 0) - step / 0.07;
     }
   });
