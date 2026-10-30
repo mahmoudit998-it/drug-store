@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Lenis from "lenis";
+import "lenis/dist/lenis.css";
 import { Check, ChevronDown, List, ShoppingCart } from "lucide-react";
 import { fmt, tr, type Dictionary, type Locale } from "@/lib/i18n";
 import { money } from "@/lib/format";
@@ -106,13 +108,27 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
     return () => clearTimeout(id);
   }, [toast]);
 
+  // Inertial smooth scrolling for mouse wheels and trackpads (touch keeps native momentum),
+  // so the walk glides instead of stepping with each wheel notch.
+  const lenisRef = useRef<Lenis | null>(null);
+  useEffect(() => {
+    if (reducedMotion) return;
+    const lenis = new Lenis({ autoRaf: true, lerp: 0.075, wheelMultiplier: 0.8, allowNestedScroll: true });
+    lenisRef.current = lenis;
+    return () => {
+      lenis.destroy();
+      lenisRef.current = null;
+    };
+  }, [reducedMotion]);
+
   const jumpTo = useCallback(
     (target: number) => {
       const el = sectionRef.current;
       if (!el) return;
       const total = el.offsetHeight - window.innerHeight;
       const top = window.scrollY + el.getBoundingClientRect().top + (rawForStop(target, stops) / (stops - 1)) * total;
-      window.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
+      if (lenisRef.current) lenisRef.current.scrollTo(top, { duration: 1.8 });
+      else window.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
     },
     [stops, reducedMotion]
   );
@@ -166,7 +182,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
   const stopColor = (i: number) => (i >= 1 && i <= shelves.length ? shelves[i - 1].brand_color : "#0b5d34");
 
   return (
-    <div ref={sectionRef} className="relative" style={{ height: `${stops * 115}vh` }}>
+    <div ref={sectionRef} className="relative" style={{ height: `${stops * 140}vh` }}>
       <div className="sticky top-0 h-dvh overflow-hidden bg-[#edf3ef]">
         {webgl && fontsReady && (
           <div className="absolute inset-0">

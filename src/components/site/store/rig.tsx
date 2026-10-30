@@ -26,10 +26,11 @@ export function CameraRig({
   reducedMotion: boolean;
 }) {
   const path = useRef<Path | null>(null);
-  const body = useRef({ x: 0, z: 0, yaw: 0, pitch: 0, lateral: 0, walked: 0, started: false });
+  // One smoothed walk position drives everything, so position, head turn and cart stay in step.
+  const walk = useRef({ p: 0, v: 0, started: false, walked: 0, x: 0, z: 0 });
   const point = useRef(new THREE.Vector3());
 
-  useFrame((state, delta) => {
+  useFrame((state, rawDelta) => {
     const camera = state.camera as THREE.PerspectiveCamera;
     const aspect = state.size.width / Math.max(1, state.size.height);
     const wide = aspect >= 1;
@@ -52,7 +53,18 @@ export function CameraRig({
     }
     const { poses, curve } = path.current;
 
-    const pos = Math.min(stops - 1, Math.max(0, progress.current ?? 0));
+    const w = walk.current;
+    const target = Math.min(stops - 1, Math.max(0, progress.current ?? 0));
+    // The spring is stable at any frame time; only cap the long gap after a hidden tab.
+    const delta = Math.min(rawDelta, 0.25);
+    if (!w.started) {
+      w.p = target;
+      w.started = true;
+    } else {
+      w.p = smoothDamp(w.p, target, w, reducedMotion ? 0.04 : 0.55, delta);
+    }
+
+    const pos = Math.min(stops - 1, Math.max(0, w.p));
     const k = Math.min(Math.floor(pos), stops - 2);
     const t = pos - k;
     const a = poses[k];
@@ -60,41 +72,55 @@ export function CameraRig({
     // getPoint spaces stops evenly in t, so pos / (stops - 1) lands exactly on each stop.
     curve.getPoint(pos / (stops - 1), point.current);
 
+    // Ease the head turn: look down the aisle while walking, at the bay when standing.
+    const te = t * t * (3 - 2 * t);
     const travel = Math.sin(Math.PI * t);
-    const tYaw = (a.yaw + (b.yaw - a.yaw) * t) * (1 - 0.8 * travel);
-    const tPitch = a.pitch + (b.pitch - a.pitch) * t - 0.1 * travel;
-    const tLateral = (a.lateral + (b.lateral - a.lateral) * t) * (1 - travel);
+    const yaw = (a.yaw + (b.yaw - a.yaw) * te) * (1 - 0.8 * travel);
+    const pitch = a.pitch + (b.pitch - a.pitch) * te - 0.1 * travel;
+    const lateral = (a.lateral + (b.lateral - a.lateral) * te) * (1 - travel);
 
-    const st = body.current;
-    const s = st.started ? 1 - Math.exp(-delta * (reducedMotion ? 30 : 4)) : 1;
-    st.started = true;
-    const px = st.x;
-    const pz = st.z;
-    st.x += (point.current.x - st.x) * s;
-    st.z += (point.current.z - st.z) * s;
-    st.yaw += (tYaw - st.yaw) * s;
-    st.pitch += (tPitch - st.pitch) * s;
-    st.lateral += (tLateral - st.lateral) * s;
-    const step = Math.hypot(st.x - px, st.z - pz);
-    st.walked += step;
+    const step = Math.hypot(point.current.x - w.x, point.current.z - w.z);
+    w.x = point.current.x;
+    w.z = point.current.z;
+    w.walked += step;
 
-    // a little head bob while walking
-    const bob = reducedMotion ? 0 : Math.sin(st.walked * 6) * Math.min(1, step * 40) * 0.018;
-    camera.position.set(st.x, EYE + bob, st.z);
-    camera.rotation.set(st.pitch, st.yaw, 0, "YXZ");
+    // gentle head bob, scaled by walking speed
+    const speed = Math.min(1, Math.abs(w.v) * 1.5);
+    const bob = reducedMotion ? 0 : Math.sin(w.walked * 5.2) * speed * 0.012;
+    camera.position.set(w.x, EYE + bob, w.z);
+    camera.rotation.set(pitch, yaw, 0, "YXZ");
 
     const cart = cartRef.current;
     if (cart) {
       // Pushed 1.25 m ahead, slid sideways when parked, turned less than the head.
-      const cos = Math.cos(st.yaw);
-      const sin = Math.sin(st.yaw);
-      const lx = st.lateral;
+      const cos = Math.cos(yaw);
+      const sin = Math.sin(yaw);
       const lz = -1.25;
-      cart.position.set(st.x + lx * cos + lz * sin, 0, st.z - lx * sin + lz * cos);
-      cart.rotation.y = st.yaw * 0.45;
+      cart.position.set(w.x + lateral * cos + lz * sin, 0, w.z - lateral * sin + lz * cos);
+      cart.rotation.y = yaw * 0.45;
       cart.userData.spin = (cart.userData.spin ?? 0) - step / 0.07;
     }
   });
 
   return null;
+}
+
+/**
+ * Critically damped spring towards `target` (Unity's SmoothDamp): starts and stops
+ * gently with no overshoot. `state.v` carries the velocity between frames.
+ */
+function smoothDamp(current: number, target: number, state: { v: number }, smoothTime: number, dt: number) {
+  const omega = 2 / smoothTime;
+  const x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = current - target;
+  const temp = (state.v + omega * change) * dt;
+  state.v = (state.v - omega * temp) * exp;
+  let out = target + (change + temp) * exp;
+  // don't overshoot
+  if (target - current > 0 === out > target) {
+    out = target;
+    state.v = 0;
+  }
+  return out;
 }

@@ -106,12 +106,13 @@ export function easeStops(raw: number, stops: number) {
   const k = Math.floor(p);
   if (k >= max) return max;
   const f = p - k;
-  const t = Math.min(1, Math.max(0, (f - 0.3) / 0.5));
-  return k + t * t * (3 - 2 * t);
+  // rest for the first fifth of each step, walk through most of it (smootherstep)
+  const t = Math.min(1, Math.max(0, (f - 0.2) / 0.65));
+  return k + t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 /** Raw progress value that lands squarely on a stop (inside its resting range). */
-export const rawForStop = (stop: number, stops: number) => (stop >= stops - 1 ? stops - 1 : stop + 0.12);
+export const rawForStop = (stop: number, stops: number) => (stop >= stops - 1 ? stops - 1 : stop + 0.08);
 
 /** Short aisle code shown on signs: A1, A2, ... */
 export const aisleCode = (i: number) => `A${i + 1}`;
