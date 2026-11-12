@@ -5,6 +5,8 @@ export type StoreProduct = {
   name_ar: string;
   subtitle_en: string | null;
   subtitle_ar: string | null;
+  description_en: string | null;
+  description_ar: string | null;
   active_ingredient: string | null;
   pack_size: string | null;
   price: number;

@@ -18,6 +18,8 @@ export const BOX = { w: 0.44, h: 0.42, d: 0.26 };
 // Bottom of each row of boxes, top row first.
 export const ROW_Y = [2.02, 1.48, 0.94, 0.4];
 export const TOP_BOARD = 2.52;
+/** Clear height between one shelf board and the next. */
+export const ROW_GAP = ROW_Y[0] - ROW_Y[1];
 
 export const stopCount = (bays: number) => bays + 2;
 export const zoneZ = (i: number) => -2.6 - i * ZONE;
@@ -48,6 +50,23 @@ export function slotLocal(slot: number, rtl: boolean, count: number): [number, n
   const x = -((COLS - 1) / 2) * step + col * step;
   // Columns read in the language's direction.
   return [rtl ? -x : x, ROW_Y[row] + BOX.h / 2 + 0.005, GONDOLA.d / 2 - BOX.d / 2 - 0.04];
+}
+
+/** Width of one product slot along the shelf. */
+export const SLOT_STEP = (GONDOLA.len - 0.3) / COLS;
+
+/** Local point (inside the gondola frame) where a slot's packs stand: centre x, board top y, front edge z. */
+export function slotBase(slot: number, rtl: boolean, count: number): [number, number, number] {
+  const [x] = slotLocal(slot, rtl, count);
+  return [x, ROW_Y[slotRow(slot, count)] + 0.002, GONDOLA.d / 2 - 0.035];
+}
+
+/** Turns a local gondola point of bay `bay` into world coordinates. */
+export function bayToWorld(bay: number, rtl: boolean, [lx, ly, lz]: [number, number, number]): [number, number, number] {
+  const { position, rotationY } = gondolaFrame(zoneZ(bay), sideOf(bay, rtl));
+  const c = Math.cos(rotationY);
+  const s = Math.sin(rotationY);
+  return [position[0] + lx * c + lz * s, ly, position[2] - lx * s + lz * c];
 }
 
 /** World position of a product slot on company bay `bay`. */

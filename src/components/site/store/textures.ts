@@ -3,9 +3,9 @@ import * as THREE from "three";
 /** Same-origin, resized copy of an image through the Next.js image optimizer (avoids CORS on textures). */
 export const optimized = (src: string, w = 256) => `/_next/image?url=${encodeURIComponent(src)}&w=${w}&q=75`;
 
-const fontFamily = () => getComputedStyle(document.body).fontFamily;
+export const fontFamily = () => getComputedStyle(document.body).fontFamily;
 
-function canvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void) {
+export function canvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -17,7 +17,7 @@ function canvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2
   return { tex, ctx };
 }
 
-function loadImage(src: string, w = 256) {
+export function loadImage(src: string, w = 256) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.decoding = "async";
@@ -27,14 +27,14 @@ function loadImage(src: string, w = 256) {
   });
 }
 
-function drawContained(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+export function drawContained(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
   const s = Math.min(w / img.width, h / img.height);
   const dw = img.width * s;
   const dh = img.height * s;
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
-function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, weight: number, size: number) {
+export function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, weight: number, size: number) {
   let px = size;
   do {
     ctx.font = `${weight} ${px}px ${fontFamily()}`;
@@ -56,27 +56,6 @@ function drawLogo(ctx: CanvasRenderingContext2D, tex: THREE.Texture, url: string
       tex.needsUpdate = true;
     })
     .catch(() => {});
-}
-
-/** Front face of a product box: the product photo on white with a thin brand-coloured band. */
-export function productFace(imageUrl: string | null, color: string) {
-  const S = 512;
-  const { tex, ctx } = canvasTexture(S, S, (c) => {
-    c.fillStyle = "#ffffff";
-    c.fillRect(0, 0, S, S);
-    c.fillStyle = color;
-    c.fillRect(0, S - 24, S, 24);
-  });
-  if (imageUrl) {
-    // 640 is the smallest optimizer width above the 512px canvas
-    loadImage(imageUrl, 640)
-      .then((img) => {
-        drawContained(ctx, img, 16, 8, S - 32, S - 40);
-        tex.needsUpdate = true;
-      })
-      .catch(() => {});
-  }
-  return tex;
 }
 
 /** Back-lit header on top of a company bay: logo and name on the brand colour. */
@@ -189,18 +168,58 @@ export function textSign(text: string, bg: string, fg: string, w = 1024, h = 200
   }).tex;
 }
 
-/** Polished warehouse floor: large pale tiles with a faint seam. */
+/** Polished dark concrete: mottled grey with faint saw-cut joints, tiled across the floor. */
 export function floorTiles() {
-  const S = 256;
+  const S = 512;
   const { tex } = canvasTexture(S, S, (c) => {
-    c.fillStyle = "#eef1ef";
+    c.fillStyle = "#34302c";
     c.fillRect(0, 0, S, S);
-    c.strokeStyle = "#dde3df";
-    c.lineWidth = 3;
-    c.strokeRect(0, 0, S, S);
+    let seed = 11;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 900; i++) {
+      const r = 6 + rand() * 40;
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, r);
+      const v = rand() > 0.5 ? "255,240,225" : "0,0,0";
+      g.addColorStop(0, `rgba(${v},${0.02 + rand() * 0.03})`);
+      g.addColorStop(1, `rgba(${v},0)`);
+      c.save();
+      c.translate(rand() * S, rand() * S);
+      c.fillStyle = g;
+      c.fillRect(-r, -r, r * 2, r * 2);
+      c.restore();
+    }
+    c.strokeStyle = "rgba(0,0,0,.45)";
+    c.lineWidth = 2;
+    c.strokeRect(1, 1, S - 2, S - 2);
   });
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
+}
+
+let pegboardTex: THREE.Texture | null = null;
+
+/** Shared perforated back panel for the shelves (1 tile = 4 x 4 holes). */
+export function pegboard() {
+  if (!pegboardTex) {
+    const S = 128;
+    pegboardTex = canvasTexture(S, S, (c) => {
+      c.fillStyle = "#3a3734";
+      c.fillRect(0, 0, S, S);
+      for (let y = 0; y < 4; y++)
+        for (let x = 0; x < 4; x++) {
+          c.fillStyle = "#121110";
+          c.beginPath();
+          c.arc(x * 32 + 16, y * 32 + 16, 4.5, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = "rgba(255,255,255,.06)";
+          c.beginPath();
+          c.arc(x * 32 + 16, y * 32 + 17.5, 4.5, 0, Math.PI);
+          c.fill();
+        }
+    }).tex;
+    pegboardTex.wrapS = pegboardTex.wrapT = THREE.RepeatWrapping;
+  }
+  return pegboardTex;
 }
 
 /** Wire mesh used for the shopping cart basket (transparent between the wires). */
@@ -223,8 +242,8 @@ export function baseShadow() {
   if (!baseShadowTex) {
     baseShadowTex = canvasTexture(4, 64, (c) => {
       const g = c.createLinearGradient(0, 0, 0, 64);
-      g.addColorStop(0, "rgba(16,40,28,0)");
-      g.addColorStop(1, "rgba(16,40,28,0.28)");
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0,0.55)");
       c.fillStyle = g;
       c.fillRect(0, 0, 4, 64);
     }).tex;
@@ -237,8 +256,8 @@ export function softShadow() {
   const S = 128;
   const { tex } = canvasTexture(S, S, (c) => {
     const g = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-    g.addColorStop(0, "rgba(16,40,28,0.32)");
-    g.addColorStop(1, "rgba(16,40,28,0)");
+    g.addColorStop(0, "rgba(0,0,0,0.5)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
     c.fillStyle = g;
     c.fillRect(0, 0, S, S);
   });
