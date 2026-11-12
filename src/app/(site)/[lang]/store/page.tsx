@@ -36,6 +36,8 @@ export default async function StorePage({ params }: PageProps<"/[lang]/store">) 
           name_ar: p.name_ar,
           subtitle_en: p.subtitle_en,
           subtitle_ar: p.subtitle_ar,
+          description_en: p.description_en,
+          description_ar: p.description_ar,
           active_ingredient: p.active_ingredient,
           pack_size: p.pack_size,
           price: Number(p.price),

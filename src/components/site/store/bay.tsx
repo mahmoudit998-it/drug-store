@@ -1,29 +1,51 @@
 "use client";
 
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { BOX, COLS, GONDOLA, ROWS, ROW_Y, SLOTS, aisleCode, gondolaFrame, sideOf, slotLocal, slotRow, zoneZ } from "./layout";
+import { COLS, GONDOLA, ROWS, ROW_GAP, ROW_Y, SLOTS, SLOT_STEP, aisleCode, gondolaFrame, sideOf, slotBase, slotRow, zoneZ } from "./layout";
 import { GondolaFrame } from "./environment";
-import { aisleSign, bayHeader, priceStrip, shade } from "./textures";
-import type { StoreShelf } from "./types";
+import { SHELF_SCALE, packLayout, type Pack } from "./packs";
+import { aisleSign, bayHeader, priceStrip } from "./textures";
+import type { Pick, StoreShelf } from "./types";
 
 export type HoverHandler = (slot: number | null, x?: number, y?: number) => void;
+
+/** A product's pack shape and its six face materials (shared by shelf, hand and cart copies). */
+export type PackVisual = { pack: Pack; materials: THREE.Material[] };
+
+const geometries = new Map<string, { pack: THREE.BufferGeometry; outline: THREE.BufferGeometry }>();
+
+/** Rounded pack geometry in centimetres (scale it to metres); cached per pack shape. */
+export function packGeometry(pack: Pack) {
+  const id = pack.size.join("x");
+  let g = geometries.get(id);
+  if (!g) {
+    const [w, h, d] = pack.size;
+    g = {
+      pack: new RoundedBoxGeometry(w, h, d, 2, Math.min(0.3, d * 0.08)),
+      outline: new THREE.BoxGeometry(w + 0.7, h + 0.7, d + 0.7),
+    };
+    geometries.set(id, g);
+  }
+  return g;
+}
 
 type BayProps = {
   shelf: StoreShelf;
   index: number;
   rtl: boolean;
-  faces: THREE.Texture[];
+  visuals: PackVisual[];
   price: (v: number) => string;
-  selectedSlot: number | null;
+  /** The pack currently in the shopper's hand; its shelf copy is hidden meanwhile. */
+  takenRef: RefObject<Pick | null>;
   onPick: (slot: number) => void;
   onHover: HoverHandler;
 };
 
-/** One company's branded bay: gondola, back-lit header, price rails, products and the aisle sign above. */
-export function CompanyBay({ shelf, index, rtl, faces, price, selectedSlot, onPick, onHover }: BayProps) {
+/** One company's branded bay: gondola, back-lit header, price rails, packs and the aisle sign above. */
+export function CompanyBay({ shelf, index, rtl, visuals, price, takenRef, onPick, onHover }: BayProps) {
   const side = sideOf(index, rtl);
   const { position, rotationY } = gondolaFrame(zoneZ(index), side);
   const name = rtl ? shelf.name_ar || shelf.name_en : shelf.name_en;
@@ -41,16 +63,14 @@ export function CompanyBay({ shelf, index, rtl, faces, price, selectedSlot, onPi
   useEffect(() => () => sign.dispose(), [sign]);
   useEffect(() => () => rails.forEach((r) => r.dispose()), [rails]);
 
-  const sideColor = useMemo(() => shade(shelf.brand_color, 0.35), [shelf.brand_color]);
-
   return (
     <>
       <group position={position} rotation-y={rotationY}>
-        <GondolaFrame color="#ffffff" accent={shelf.brand_color} />
+        <GondolaFrame accent={shelf.brand_color} />
         {/* back-lit header */}
         <mesh position={[0, GONDOLA.h + 0.2, 0.02]}>
           <boxGeometry args={[GONDOLA.len + 0.06, 0.48, 0.16]} />
-          <meshStandardMaterial color={shelf.brand_color} />
+          <meshStandardMaterial color="#141416" roughness={0.5} metalness={0.4} />
         </mesh>
         <mesh position={[0, GONDOLA.h + 0.2, 0.101]}>
           <planeGeometry args={[GONDOLA.len, GONDOLA.len / 8]} />
@@ -58,24 +78,25 @@ export function CompanyBay({ shelf, index, rtl, faces, price, selectedSlot, onPi
         </mesh>
         {/* price rails on the board edges */}
         {rails.map((tex, row) => (
-          <mesh key={row} position={[0, ROW_Y[row] - 0.035, GONDOLA.d / 2 - 0.015]}>
+          <mesh key={row} position={[0, ROW_Y[row] - 0.035, GONDOLA.d / 2 - 0.012]}>
             <planeGeometry args={[GONDOLA.len - 0.1, 0.075]} />
-            <meshBasicMaterial map={tex} toneMapped={false} />
+            <meshStandardMaterial map={tex} roughness={0.6} emissive="#ffffff" emissiveMap={tex} emissiveIntensity={0.18} />
           </mesh>
         ))}
-        {shelf.products.slice(0, SLOTS).map((p, slot) => (
-          <ProductBox
-            key={p.id}
-            position={slotLocal(slot, rtl, count)}
-            face={faces[slot]}
-            sideColor={sideColor}
-            highlight={shelf.brand_color}
-            inStock={p.in_stock}
-            selected={selectedSlot === slot}
-            onPick={() => onPick(slot)}
-            onHover={(on, x, y) => onHover(on ? slot : null, x, y)}
-          />
-        ))}
+        {shelf.products.slice(0, SLOTS).map((p, slot) =>
+          visuals[slot] ? (
+            <ShelfPacks
+              key={p.id}
+              visual={visuals[slot]}
+              base={slotBase(slot, rtl, count)}
+              seed={index * 31 + slot}
+              highlight={shelf.brand_color}
+              isTaken={() => takenRef.current?.shelf === index && takenRef.current.slot === slot}
+              onPick={() => onPick(slot)}
+              onHover={(on, x, y) => onHover(on ? slot : null, x, y)}
+            />
+          ) : null
+        )}
       </group>
 
       {/* hanging aisle sign over the aisle */}
@@ -87,7 +108,7 @@ export function CompanyBay({ shelf, index, rtl, faces, price, selectedSlot, onPi
         {[-0.8, 0.8].map((x) => (
           <mesh key={x} position={[x, 0.5, 0]}>
             <cylinderGeometry args={[0.006, 0.006, 0.62, 6]} />
-            <meshBasicMaterial color="#9aa6a0" />
+            <meshStandardMaterial color="#3a3a3c" metalness={0.8} roughness={0.4} />
           </mesh>
         ))}
       </group>
@@ -95,46 +116,76 @@ export function CompanyBay({ shelf, index, rtl, faces, price, selectedSlot, onPi
   );
 }
 
-// Slightly rounded packs; the geometry keeps the box's six material groups (front face = 4).
-const packGeometry = new RoundedBoxGeometry(BOX.w, BOX.h, BOX.d, 2, 0.016);
-const outlineGeometry = new THREE.BoxGeometry(BOX.w, BOX.h, BOX.d);
+/** Local position (in the slot) of the copy that is picked up and put back. */
+export function takenFacing(pack: Pack) {
+  return new THREE.Vector3(...packLayout(pack, SLOT_STEP, ROW_GAP)[0]);
+}
 
-function ProductBox({
-  position,
-  face,
-  sideColor,
+const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+
+/** All facings of one product in its slot, drawn as one instanced mesh (one draw per face). */
+function ShelfPacks({
+  visual,
+  base,
+  seed,
   highlight,
-  inStock,
-  selected,
+  isTaken,
   onPick,
   onHover,
 }: {
-  position: [number, number, number];
-  face: THREE.Texture;
-  sideColor: string;
+  visual: PackVisual;
+  base: [number, number, number];
+  seed: number;
   highlight: string;
-  inStock: boolean;
-  selected: boolean;
+  isTaken: () => boolean;
   onPick: () => void;
   onHover: (on: boolean, x?: number, y?: number) => void;
 }) {
+  const { pack, materials } = visual;
+  const geo = packGeometry(pack);
+  const layout = useMemo(() => packLayout(pack, SLOT_STEP, ROW_GAP), [pack]);
+  const facings = layout.length;
   const group = useRef<THREE.Group>(null);
-  const outline = useRef<THREE.Mesh>(null);
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const outline = useRef<THREE.InstancedMesh>(null);
   const hovered = useRef(false);
+  const wasTaken = useRef(false);
 
-  useFrame((state, delta) => {
+  const matrices = useMemo(() => {
+    const r = { s: seed * 9301 + 49297 };
+    const rand = () => (r.s = (r.s * 9301 + 49297) % 233280) / 233280;
+    return layout.map(([x, y, z]) => {
+      // packs are never lined up perfectly on a real shelf
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (rand() - 0.5) * 0.06);
+      const p = new THREE.Vector3(x + (rand() - 0.5) * 0.008, y, z - rand() * 0.012);
+      return new THREE.Matrix4().compose(p, q, new THREE.Vector3(SHELF_SCALE, SHELF_SCALE, SHELF_SCALE));
+    });
+  }, [layout, seed]);
+
+  useLayoutEffect(() => {
+    for (const m of [mesh.current, outline.current]) {
+      if (!m) continue;
+      matrices.forEach((mat, i) => m.setMatrixAt(i, mat));
+      m.instanceMatrix.needsUpdate = true;
+      m.computeBoundingSphere();
+    }
+    wasTaken.current = false;
+  }, [matrices]);
+
+  useFrame((_, delta) => {
     const g = group.current;
-    if (!g) return;
-    const s = 1 - Math.exp(-delta * 10);
-    const active = selected || hovered.current;
-    const z = position[2] + (selected ? 0.34 : hovered.current ? 0.1 : 0);
-    const y = position[1] + (selected ? 0.05 + Math.sin(state.clock.elapsedTime * 2.4) * 0.02 : 0);
+    const m = mesh.current;
+    if (!g || !m) return;
+    const taken = isTaken();
+    if (taken !== wasTaken.current) {
+      wasTaken.current = taken;
+      m.setMatrixAt(0, taken ? hidden : matrices[0]);
+      m.instanceMatrix.needsUpdate = true;
+    }
+    const s = 1 - Math.exp(-delta * 12);
+    const z = base[2] + (hovered.current ? 0.04 : 0);
     g.position.z += (z - g.position.z) * s;
-    g.position.y += (y - g.position.y) * s;
-    const scale = selected ? 1.12 : hovered.current ? 1.05 : 1;
-    g.scale.setScalar(g.scale.x + (scale - g.scale.x) * s);
-    g.rotation.y += ((selected ? Math.sin(state.clock.elapsedTime * 1.3) * 0.2 : 0) - g.rotation.y) * s;
-    if (outline.current) outline.current.visible = active;
+    if (outline.current) outline.current.visible = hovered.current;
   });
 
   const over = (e: ThreeEvent<PointerEvent>) => {
@@ -152,10 +203,13 @@ function ProductBox({
     document.body.style.cursor = "";
   }, []);
 
-  const tint = inStock ? "#ffffff" : "#b9c2bd";
   return (
-    <group ref={group} position={position}>
-      <mesh
+    <group ref={group} position={base}>
+      <instancedMesh
+        ref={mesh}
+        args={[geo.pack, materials, facings]}
+        castShadow
+        receiveShadow
         onClick={(e) => {
           e.stopPropagation();
           onPick();
@@ -163,70 +217,11 @@ function ProductBox({
         onPointerOver={over}
         onPointerMove={(e) => onHover(true, e.nativeEvent.clientX, e.nativeEvent.clientY)}
         onPointerOut={out}
-        geometry={packGeometry}
-      >
-        <meshStandardMaterial attach="material-0" color={sideColor} />
-        <meshStandardMaterial attach="material-1" color={sideColor} />
-        <meshStandardMaterial attach="material-2" color={sideColor} />
-        <meshStandardMaterial attach="material-3" color={sideColor} />
-        <meshStandardMaterial attach="material-4" map={face} color={tint} roughness={0.4} />
-        <meshStandardMaterial attach="material-5" color={sideColor} />
-      </mesh>
-      {/* outline: a slightly larger back-faced box in the brand colour */}
-      <mesh ref={outline} geometry={outlineGeometry} scale={1.09} visible={false} raycast={() => null}>
-        <meshBasicMaterial color={highlight} side={THREE.BackSide} />
-      </mesh>
+      />
+      {/* hover outline: slightly larger back faces in the brand colour */}
+      <instancedMesh ref={outline} args={[geo.outline, undefined, facings]} visible={false} raycast={() => null}>
+        <meshBasicMaterial color={highlight} side={THREE.BackSide} toneMapped={false} />
+      </instancedMesh>
     </group>
-  );
-}
-
-export function FlyingBox({
-  from,
-  face,
-  color,
-  cartRef,
-  duration,
-  onDone,
-}: {
-  from: [number, number, number];
-  face: THREE.Texture | undefined;
-  color: string;
-  cartRef: RefObject<THREE.Group | null>;
-  duration: number;
-  onDone: () => void;
-}) {
-  const ref = useRef<THREE.Mesh>(null);
-  const start = useRef<number | null>(null);
-  const done = useRef(false);
-  const origin = useMemo(() => new THREE.Vector3(...from), [from]);
-  const to = useMemo(() => new THREE.Vector3(), []);
-
-  useFrame((state) => {
-    const m = ref.current;
-    const cart = cartRef.current;
-    if (!m || !cart || done.current) return;
-    if (start.current === null) start.current = state.clock.elapsedTime;
-    const t = Math.min(1, (state.clock.elapsedTime - start.current) / duration);
-    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    cart.localToWorld(to.set(0, 0.8, -0.7));
-    m.position.lerpVectors(origin, to, e);
-    m.position.y += Math.sin(Math.PI * t) * 0.55;
-    m.rotation.set(t * Math.PI * 0.7, t * Math.PI * 2, 0);
-    m.scale.setScalar(1.05 - 0.65 * e);
-    if (t >= 1) {
-      done.current = true;
-      onDone();
-    }
-  });
-
-  return (
-    <mesh ref={ref} position={origin} geometry={packGeometry}>
-      <meshStandardMaterial attach="material-0" color={color} />
-      <meshStandardMaterial attach="material-1" color={color} />
-      <meshStandardMaterial attach="material-2" color={color} />
-      <meshStandardMaterial attach="material-3" color={color} />
-      <meshStandardMaterial attach="material-4" map={face ?? null} />
-      <meshStandardMaterial attach="material-5" color={color} />
-    </mesh>
   );
 }

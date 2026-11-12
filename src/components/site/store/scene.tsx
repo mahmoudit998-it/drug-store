@@ -1,15 +1,19 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { Bloom, DepthOfField, EffectComposer, Noise, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { BlendFunction, ToneMappingMode, type DepthOfFieldEffect } from "postprocessing";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { SLOTS, checkoutZ, slotWorld, stopCount } from "./layout";
 import { Pharmacist } from "./character";
-import { productFace } from "./textures";
-import { CompanyBay, FlyingBox, type HoverHandler } from "./bay";
+import { CompanyBay, type HoverHandler, type PackVisual } from "./bay";
 import { ShoppingCart } from "./cart-model";
-import { Warehouse } from "./environment";
+import { KeyLight, Warehouse } from "./environment";
+import { FlyingBox, HeldPack, newHeldPose, type HeldPose, type Spin } from "./inspect";
+import { shelfPackMaterials, type PackLabels } from "./pack-faces";
+import { packFor } from "./packs";
 import { CameraRig } from "./rig";
 import type { Flight, Pick, StoreShelf } from "./types";
 
@@ -26,18 +30,29 @@ export type SceneProps = {
   /** Brand colours of the packs in the cart, one per box shown in the basket. */
   basket: string[];
   reducedMotion: boolean;
-  labels: { storeName: string; checkout: string };
+  labels: { storeName: string; checkout: string; pack: PackLabels };
   price: (value: number) => string;
+  /** Drag rotation of the pack in hand. */
+  spinRef: RefObject<Spin>;
 };
 
-const FOG = "#edf3ef";
+const FOG = "#0c0b0a";
+
+const isMobile = () => window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768;
 
 export default function StoreScene(props: SceneProps) {
+  const [mobile] = useState(isMobile);
   return (
-    <Canvas dpr={[1, 2]} gl={{ antialias: true, powerPreference: "high-performance" }} camera={{ fov: 52, near: 0.05, far: 60, position: [0, 1.6, 4] }} aria-hidden>
+    <Canvas
+      shadows={{ type: THREE.PCFShadowMap }}
+      dpr={[1, 2]}
+      gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
+      camera={{ fov: 52, near: 0.05, far: 60, position: [0, 1.6, 4] }}
+      aria-hidden
+    >
       <AdaptiveResolution />
       <StudioLighting />
-      <World {...props} />
+      <World {...props} mobile={mobile} />
     </Canvas>
   );
 }
@@ -80,7 +95,7 @@ function AdaptiveResolution() {
   return null;
 }
 
-/** Soft image-based lighting from a generated room, computed once; gives materials realistic sheen. */
+/** Soft image-based reflections from a generated room, kept low so the store stays moody. */
 function StudioLighting() {
   const get = useThree((s) => s.get);
   useEffect(() => {
@@ -88,7 +103,7 @@ function StudioLighting() {
     const pmrem = new THREE.PMREMGenerator(gl);
     const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.55;
+    scene.environmentIntensity = 0.22;
     pmrem.dispose();
     return () => {
       scene.environment = null;
@@ -98,15 +113,61 @@ function StudioLighting() {
   return null;
 }
 
-function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onFlightDone, basket, reducedMotion, labels, price }: SceneProps) {
-  const cartRef = useRef<THREE.Group>(null);
-
-  // One face texture per product, shared by its shelf box and any flying copy.
-  const faces = useMemo(
-    () => shelves.map((s) => s.products.slice(0, SLOTS).map((p) => productFace(p.image_url, s.brand_color))),
-    [shelves]
+/**
+ * Film look: bloom on the light strips and signs, filmic tone mapping, vignette and grain,
+ * and (on larger screens) a shallow focus on the pack in hand.
+ */
+function Effects({ poseRef, mobile }: { poseRef: RefObject<HeldPose>; mobile: boolean }) {
+  const dof = useRef<DepthOfFieldEffect>(null);
+  const focus = useMemo(() => new THREE.Vector3(0, 1.4, -2), []);
+  useFrame((state, delta) => {
+    const d = dof.current;
+    if (!d) return;
+    const p = poseRef.current;
+    const on = !!p?.active;
+    if (on && p) focus.copy(p.pos);
+    else state.camera.getWorldDirection(focus).multiplyScalar(4).add(state.camera.position);
+    d.target = focus;
+    const want = on ? 3.2 : 0;
+    d.bokehScale += (want - d.bokehScale) * (1 - Math.exp(-Math.min(delta, 0.1) * 5));
+  });
+  const common = [
+    <Bloom key="bloom" mipmapBlur luminanceThreshold={0.95} luminanceSmoothing={0.2} intensity={0.75} radius={0.7} />,
+    <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} />,
+    <Vignette key="vignette" offset={0.28} darkness={0.62} />,
+    <Noise key="grain" premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.1} />,
+  ];
+  // Phones skip the focus blur: it is the most expensive pass.
+  return mobile ? (
+    <EffectComposer multisampling={0} enableNormalPass={false}>
+      {common}
+    </EffectComposer>
+  ) : (
+    <EffectComposer multisampling={4} enableNormalPass={false}>
+      <DepthOfField ref={dof} focusRange={0.12} bokehScale={0} resolutionScale={0.5} />
+      {common}
+    </EffectComposer>
   );
-  useEffect(() => () => faces.flat().forEach((t) => t.dispose()), [faces]);
+}
+
+function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onFlightDone, basket, reducedMotion, labels, price, spinRef, mobile }: SceneProps & { mobile: boolean }) {
+  const cartRef = useRef<THREE.Group>(null);
+  const taken = useRef<Pick | null>(null);
+  const pose = useRef<HeldPose>(newHeldPose());
+
+  // One pack shape and face set per product, shared by its shelf facings, the hand and the cart flight.
+  const built = useMemo(
+    () =>
+      shelves.map((s) =>
+        s.products.slice(0, SLOTS).map((p) => {
+          const pack = packFor(p);
+          return { pack, ...shelfPackMaterials(p, s, pack, rtl) };
+        })
+      ),
+    [shelves, rtl]
+  );
+  useEffect(() => () => built.flat().forEach((b) => b.dispose()), [built]);
+  const visuals = useMemo<PackVisual[][]>(() => built.map((row) => row.map((b) => ({ pack: b.pack, materials: b.materials }))), [built]);
 
   const hoverHandlers = useMemo<HoverHandler[]>(
     () => shelves.map((_, i) => (slot, x, y) => onHover(slot === null ? null : { shelf: i, slot }, x, y)),
@@ -116,9 +177,10 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
   return (
     <>
       <color attach="background" args={[FOG]} />
-      <fog attach="fog" args={[FOG, 12, 34]} />
+      <fog attach="fog" args={[FOG, 9, 28]} />
 
       <Warehouse bays={shelves.length} rtl={rtl} storeName={labels.storeName} checkout={labels.checkout} />
+      <KeyLight bays={shelves.length} rtl={rtl} progress={progress} mobile={mobile} />
 
       {shelves.map((s, i) => (
         <CompanyBay
@@ -126,9 +188,9 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
           shelf={s}
           index={i}
           rtl={rtl}
-          faces={faces[i]}
+          visuals={visuals[i]}
           price={price}
-          selectedSlot={selected?.shelf === i ? selected.slot : null}
+          takenRef={taken}
           onPick={(slot) => onPick({ shelf: i, slot })}
           onHover={hoverHandlers[i]}
         />
@@ -136,12 +198,25 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
 
       <ShoppingCart ref={cartRef} items={basket.slice(0, Math.max(0, basket.length - flights.length))} />
 
+      <HeldPack
+        selected={selected}
+        shelves={shelves}
+        rtl={rtl}
+        visuals={visuals}
+        labels={labels.pack}
+        spinRef={spinRef}
+        takenRef={taken}
+        poseRef={pose}
+        flights={flights}
+        reducedMotion={reducedMotion}
+      />
+
       {flights.map((f) => (
         <FlyingBox
           key={f.key}
-          from={slotWorld(f.shelf, f.slot, rtl, shelves[f.shelf]?.products.length ?? 0)}
-          face={faces[f.shelf]?.[f.slot]}
-          color={shelves[f.shelf]?.brand_color ?? "#0b5d34"}
+          visual={visuals[f.shelf]?.[f.slot]}
+          poseRef={pose}
+          fallback={slotWorld(f.shelf, f.slot, rtl, shelves[f.shelf]?.products.length ?? 0)}
           cartRef={cartRef}
           duration={reducedMotion ? 0.01 : 0.85}
           onDone={() => onFlightDone(f.key)}
@@ -151,6 +226,8 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
       <Pharmacist position={[-0.05, 0, checkoutZ(shelves.length) - 0.8]} progress={progress} arriveAt={stopCount(shelves.length) - 1.15} reducedMotion={reducedMotion} />
 
       <CameraRig bays={shelves.length} rtl={rtl} progress={progress} cartRef={cartRef} reducedMotion={reducedMotion} />
+
+      <Effects poseRef={pose} mobile={mobile} />
     </>
   );
 }

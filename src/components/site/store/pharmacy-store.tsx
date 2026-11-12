@@ -3,10 +3,10 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
-import { Check, ChevronDown, List, ShoppingCart } from "lucide-react";
+import { Check, ChevronDown, List, Rotate3d, ShoppingCart } from "lucide-react";
 import { fmt, tr, type Dictionary, type Locale } from "@/lib/i18n";
 import { money } from "@/lib/format";
 import { useCart } from "../cart";
@@ -16,6 +16,7 @@ import { CheckoutReceipt } from "./checkout-receipt";
 import { ClassicView } from "./classic-view";
 import { ProductDrawer } from "./product-drawer";
 import { ViewToggle, setView, toCartItem, useView } from "./shared";
+import type { Spin } from "./inspect";
 import type { Flight, Pick, StoreShelf } from "./types";
 
 const StoreScene = dynamic(() => import("./scene"), { ssr: false });
@@ -64,6 +65,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const progress = useRef(0);
   const flightKey = useRef(0);
+  const spin = useRef<Spin>({ yaw: 0, pitch: 0 });
   const [stop, setStop] = useState(0);
   const [selected, setSelected] = useState<Pick | null>(null);
   const [hovered, setHovered] = useState<Pick | null>(null);
@@ -169,7 +171,17 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
     setHovered((prev) => (samePick(prev, pick) ? prev : pick));
   }, []);
   const price = useCallback((v: number) => money(v, lang), [lang]);
-  const labels = useMemo(() => ({ storeName: s.storeName, checkout: s.checkout }), [s.storeName, s.checkout]);
+  const labels = useMemo(
+    () => ({ storeName: s.storeName, checkout: s.checkout, pack: { ingredient: t.product.ingredient, pack: t.product.pack, rx: t.product.rx } }),
+    [s.storeName, s.checkout, t.product.ingredient, t.product.pack, t.product.rx]
+  );
+
+  // Every pack comes off the shelf facing the shopper.
+  const pick = useCallback((p: Pick | null) => {
+    spin.current.yaw = 0;
+    spin.current.pitch = 0;
+    setSelected(p);
+  }, []);
 
   useEffect(() => {
     if (!active) return;
@@ -183,7 +195,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
 
   return (
     <div ref={sectionRef} className="relative" style={{ height: `${stops * 140}vh` }}>
-      <div className="sticky top-0 h-dvh overflow-hidden bg-[#edf3ef]">
+      <div className="sticky top-0 h-dvh overflow-hidden bg-[#0c0b0a]">
         {webgl && fontsReady && (
           <div className="absolute inset-0">
             <StoreScene
@@ -191,7 +203,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
               rtl={rtl}
               progress={progress}
               selected={active}
-              onPick={setSelected}
+              onPick={pick}
               onHover={onHover}
               flights={flights}
               onFlightDone={onFlightDone}
@@ -199,9 +211,13 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
               reducedMotion={reducedMotion}
               labels={labels}
               price={price}
+              spinRef={spin}
             />
           </div>
         )}
+
+        {/* while a pack is in hand: drag to turn it, tap to put it back */}
+        {product && webgl && <TurnLayer spinRef={spin} onTap={() => setSelected(null)} hint={s.turnPack} />}
 
         {/* hover tooltip, positioned at the pointer */}
         <div ref={tooltipRef} className="pointer-events-none fixed z-30" style={{ left: 0, top: 0, visibility: tip ? "visible" : "hidden" }}>
@@ -218,7 +234,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
           )}
         </div>
 
-        <div className="pointer-events-none absolute inset-0 flex flex-col">
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
           {/* top: where you are, view toggle and cart */}
           <div className="flex items-start justify-between gap-3 p-4 max-sm:flex-col-reverse max-sm:items-stretch sm:p-6">
             <div className={`pointer-events-auto max-w-md rounded-2xl bg-white/90 p-4 shadow-card backdrop-blur sm:p-5 ${product || atCheckout ? "max-sm:hidden" : ""}`}>
@@ -277,14 +293,14 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
 
           <div className="mt-auto">
             {shelf && !product && (
-              <div className="pointer-events-auto bg-gradient-to-t from-white via-white/90 to-white/0 pt-6">
-                <p className="container-x mb-2 text-sm font-medium text-muted">{s.pick}</p>
+              <div className="pointer-events-auto bg-gradient-to-t from-black/85 via-black/55 to-transparent pt-8">
+                <p className="container-x mb-2 text-sm font-medium text-white/75">{s.pick}</p>
                 <ul className="flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none sm:px-6">
                   {shelf.products.map((p, slot) => (
                     <li key={p.id} className="shrink-0">
                       <button
                         type="button"
-                        onClick={() => setSelected({ shelf: bay, slot })}
+                        onClick={() => pick({ shelf: bay, slot })}
                         className="flex w-60 items-center gap-3 rounded-xl border border-line bg-white p-2 text-start shadow-sm transition-shadow hover:shadow-lift"
                       >
                         <span className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-white">
@@ -305,7 +321,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
             )}
 
             {/* progress along the aisle */}
-            <nav aria-label={s.jump} className={`pointer-events-auto px-4 pb-4 pt-3 sm:px-6 ${shelf && !product ? "bg-white" : ""} ${atCheckout ? "max-sm:hidden" : ""}`}>
+            <nav aria-label={s.jump} className={`pointer-events-auto px-4 pb-4 pt-3 sm:px-6 ${shelf && !product ? "bg-black/85" : ""} ${atCheckout ? "max-sm:hidden" : ""}`}>
               <ol className="mx-auto flex max-w-3xl items-center">
                 {Array.from({ length: stops }, (_, i) => (
                   <li key={i} className="flex flex-1 items-center last:flex-none">
@@ -321,9 +337,9 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
                         className={`block rounded-full transition-all ${i === stop ? "size-4 ring-4 ring-white" : "size-2.5"}`}
                         style={{ background: stopColor(i), opacity: i <= stop ? 1 : 0.4 }}
                       />
-                      <span className="absolute top-full mt-0.5 hidden whitespace-nowrap text-[11px] font-semibold text-ink/80 lg:block">{i === stop || i === 0 || i === stops - 1 ? stopLabel(i) : ""}</span>
+                      <span className="absolute top-full mt-0.5 hidden whitespace-nowrap text-[11px] font-semibold text-white/80 lg:block">{i === stop || i === 0 || i === stops - 1 ? stopLabel(i) : ""}</span>
                     </button>
-                    {i < stops - 1 && <span className={`h-0.5 flex-1 rounded ${i < stop ? "bg-brand-600" : "bg-ink/15"}`} />}
+                    {i < stops - 1 && <span className={`h-0.5 flex-1 rounded ${i < stop ? "bg-brand-500" : "bg-white/20"}`} />}
                   </li>
                 ))}
               </ol>
@@ -347,6 +363,69 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Transparent layer over the scene while a pack is in hand. Dragging turns the pack (with a
+ * little inertia after letting go); a tap without dragging puts it back on the shelf.
+ */
+function TurnLayer({ spinRef, onTap, hint }: { spinRef: RefObject<Spin>; onTap: () => void; hint: string }) {
+  const drag = useRef<{ x: number; y: number; moved: number; vx: number; vy: number; t: number } | null>(null);
+  const raf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+
+  const turn = (dx: number, dy: number) => {
+    spinRef.current.yaw += dx * 0.012;
+    spinRef.current.pitch = Math.max(-0.8, Math.min(0.8, spinRef.current.pitch + dy * 0.008));
+  };
+
+  return (
+    <div
+      className="absolute inset-0 z-10 cursor-grab touch-none active:cursor-grabbing"
+      onPointerDown={(e) => {
+        cancelAnimationFrame(raf.current);
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { x: e.clientX, y: e.clientY, moved: 0, vx: 0, vy: 0, t: e.timeStamp };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        const dx = e.clientX - d.x;
+        const dy = e.clientY - d.y;
+        const dt = Math.max(1, e.timeStamp - d.t);
+        d.moved += Math.abs(dx) + Math.abs(dy);
+        d.vx = dx / dt;
+        d.vy = dy / dt;
+        d.x = e.clientX;
+        d.y = e.clientY;
+        d.t = e.timeStamp;
+        turn(dx, dy);
+      }}
+      onPointerUp={() => {
+        const d = drag.current;
+        drag.current = null;
+        if (!d) return;
+        if (d.moved < 6) return onTap();
+        // keep spinning briefly after a flick
+        let vx = d.vx * 16;
+        let vy = d.vy * 16;
+        const step = () => {
+          vx *= 0.92;
+          vy *= 0.92;
+          turn(vx, vy);
+          if (Math.abs(vx) + Math.abs(vy) > 0.2) raf.current = requestAnimationFrame(step);
+        };
+        raf.current = requestAnimationFrame(step);
+      }}
+      onPointerCancel={() => (drag.current = null)}
+    >
+      <p className="pointer-events-none absolute inset-x-0 top-20 flex justify-center px-4 sm:top-auto sm:bottom-20 sm:pe-[400px]">
+        <span className="inline-flex items-center gap-2 rounded-full bg-black/60 px-3.5 py-2 text-[13px] font-medium text-white backdrop-blur">
+          <Rotate3d className="size-4 text-brand-200" /> {hint}
+        </span>
+      </p>
     </div>
   );
 }
