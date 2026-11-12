@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { FileText, FlaskConical, Package, ShoppingCart, X } from "lucide-react";
@@ -42,12 +43,25 @@ export function ProductDrawer({
       aria-label={name}
       className="absolute inset-x-0 bottom-0 z-20 max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-4 shadow-lift sm:inset-x-auto sm:top-24 sm:bottom-auto sm:end-4 sm:h-fit sm:max-h-[calc(100dvh-10rem)] sm:w-[380px] sm:rounded-3xl sm:p-5"
     >
-      {/* the pack itself is shown in the hand in the 3D scene, so no photo here */}
-      <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 pt-1 text-[12px] font-bold uppercase tracking-wide" style={{ color: shelf.brand_color }}>
-          {tr(shelf, "name", lang)}
-          {p.requires_prescription && <span className="ms-2 rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white">Rx</span>}
-        </p>
+      {/* photo beside the name: the pack in hand shows it in 3D, this keeps the real photo in view */}
+      <div className="flex items-start gap-3">
+        <div className="relative size-24 shrink-0 overflow-hidden rounded-2xl border border-line bg-white sm:size-28">
+          {p.image_url ? (
+            <Image src={p.image_url} alt={name} fill sizes="112px" className="object-contain p-1.5" />
+          ) : (
+            <span className="grid size-full place-items-center" style={{ background: `${shelf.brand_color}14`, color: shelf.brand_color }}>
+              <Package className="size-8" />
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: shelf.brand_color }}>
+            {tr(shelf, "name", lang)}
+            {p.requires_prescription && <span className="ms-2 rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white">Rx</span>}
+          </p>
+          <h3 className="mt-0.5 text-lg font-extrabold leading-snug text-ink">{name}</h3>
+          {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -57,9 +71,7 @@ export function ProductDrawer({
           <X className="size-5" />
         </button>
       </div>
-      <h3 className="mt-0.5 text-lg font-extrabold leading-snug text-ink">{name}</h3>
-      {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-xl font-extrabold">{money(p.price, lang)}</span>
         {p.compare_at_price && p.compare_at_price > p.price && <span className="text-sm text-muted line-through">{money(p.compare_at_price, lang)}</span>}
         <span className={`ms-auto inline-flex items-center gap-1.5 text-[13px] font-semibold ${p.in_stock ? "text-brand-700" : "text-red-600"}`}>
