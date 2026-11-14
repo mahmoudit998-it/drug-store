@@ -2,10 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, Headset, ShieldCheck, Store, Truck } from "lucide-react";
-import { fmt, getDictionary, hasLocale, tr } from "@/lib/i18n";
+import { dir, fmt, getDictionary, hasLocale, tr } from "@/lib/i18n";
 import { getActiveBanner, getBestSellers, getCategories, getCompanies, getMaxDiscount, getSettings } from "@/lib/data";
 import { waLink } from "@/lib/format";
 import { ProductCard } from "@/components/site/product-card";
+import { ScrollMarquee } from "@/components/site/scroll-marquee";
 import { Arrow, CategoryStrip, FeaturesStrip, OfferBanner, SectionHeading, TrustBadge } from "@/components/site/sections";
 
 export default async function Home({ params }: PageProps<"/[lang]">) {
@@ -79,13 +80,18 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
       </div>
 
       {best.length > 0 && (
-        <section className="container-x mt-12">
-          <SectionHeading title={t.best.title} href={`/${lang}/products`} linkLabel={t.best.viewAll} lang={lang} />
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
-            {best.slice(0, 6).map((p, i) => (
-              <ProductCard key={p.id} p={p} lang={lang} t={t} priority={i < 2} />
-            ))}
+        <section className="mt-12">
+          <div className="container-x">
+            <SectionHeading title={t.best.title} href={`/${lang}/products`} linkLabel={t.best.viewAll} lang={lang} />
           </div>
+          {/* the row glides to the right while the page scrolls down */}
+          <ScrollMarquee dir={dir(lang)}>
+            {best.map((p, i) => (
+              <div key={p.id} className="grid w-44 shrink-0 sm:w-56">
+                <ProductCard p={p} lang={lang} t={t} priority={i < 2} />
+              </div>
+            ))}
+          </ScrollMarquee>
         </section>
       )}
 
