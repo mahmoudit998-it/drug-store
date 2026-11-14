@@ -1,8 +1,6 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Bloom, DepthOfField, EffectComposer, Noise, ToneMapping, Vignette } from "@react-three/postprocessing";
-import { BlendFunction, ToneMappingMode, type DepthOfFieldEffect } from "postprocessing";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -43,14 +41,16 @@ const isMobile = () => window.matchMedia("(pointer: coarse)").matches || window.
 export default function StoreScene(props: SceneProps) {
   const [mobile] = useState(isMobile);
   return (
+    // Tuned for smoothness over sheen: no post-processing passes, a capped resolution,
+    // and real-time shadows only on larger screens.
     <Canvas
-      shadows={{ type: THREE.PCFShadowMap }}
-      dpr={[1, 2]}
-      gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
+      shadows={mobile ? false : { type: THREE.PCFShadowMap }}
+      dpr={1}
+      gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
       camera={{ fov: 52, near: 0.05, far: 60, position: [0, 1.6, 4] }}
       aria-hidden
     >
-      <AdaptiveResolution />
+      <AdaptiveResolution mobile={mobile} />
       <StudioLighting />
       <World {...props} mobile={mobile} />
     </Canvas>
@@ -58,15 +58,15 @@ export default function StoreScene(props: SceneProps) {
 }
 
 /**
- * Starts at the screen's full sharpness (up to 2x) and steps the render resolution down
+ * Starts at a capped sharpness (1.5x, or 1.25x on phones) and steps the render resolution down
  * if the device can't keep a smooth frame rate, then back up once it recovers.
  */
-function AdaptiveResolution() {
+function AdaptiveResolution({ mobile }: { mobile: boolean }) {
   const setDpr = useThree((s) => s.setDpr);
   const levels = useMemo(() => {
-    const max = Math.min(2, window.devicePixelRatio || 1);
-    return [...new Set([max, Math.max(1, max * 0.8), Math.max(1, max * 0.65), 1])];
-  }, []);
+    const max = Math.min(mobile ? 1.25 : 1.5, window.devicePixelRatio || 1);
+    return [...new Set([max, Math.max(1, max * 0.8), 1, 0.85])];
+  }, [mobile]);
   const st = useRef({ level: 0, frames: 0, time: 0, good: 0, raises: 0 });
 
   useEffect(() => setDpr(levels[0]), [setDpr, levels]);
@@ -80,7 +80,7 @@ function AdaptiveResolution() {
     const fps = s.frames / s.time;
     s.frames = 0;
     s.time = 0;
-    if (fps < 48 && s.level < levels.length - 1) {
+    if (fps < 50 && s.level < levels.length - 1) {
       setDpr(levels[++s.level]);
       s.good = 0;
     } else if (fps > 58 && s.level > 0 && s.raises < 2) {
@@ -111,43 +111,6 @@ function StudioLighting() {
     };
   }, [get]);
   return null;
-}
-
-/**
- * Film look: bloom on the light strips and signs, filmic tone mapping, vignette and grain,
- * and (on larger screens) a shallow focus on the pack in hand.
- */
-function Effects({ poseRef, mobile }: { poseRef: RefObject<HeldPose>; mobile: boolean }) {
-  const dof = useRef<DepthOfFieldEffect>(null);
-  const focus = useMemo(() => new THREE.Vector3(0, 1.4, -2), []);
-  useFrame((state, delta) => {
-    const d = dof.current;
-    if (!d) return;
-    const p = poseRef.current;
-    const on = !!p?.active;
-    if (on && p) focus.copy(p.pos);
-    else state.camera.getWorldDirection(focus).multiplyScalar(4).add(state.camera.position);
-    d.target = focus;
-    const want = on ? 3.2 : 0;
-    d.bokehScale += (want - d.bokehScale) * (1 - Math.exp(-Math.min(delta, 0.1) * 5));
-  });
-  const common = [
-    <Bloom key="bloom" mipmapBlur luminanceThreshold={0.95} luminanceSmoothing={0.2} intensity={0.75} radius={0.7} />,
-    <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} />,
-    <Vignette key="vignette" offset={0.28} darkness={0.62} />,
-    <Noise key="grain" premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.1} />,
-  ];
-  // Phones skip the focus blur: it is the most expensive pass.
-  return mobile ? (
-    <EffectComposer multisampling={0} enableNormalPass={false}>
-      {common}
-    </EffectComposer>
-  ) : (
-    <EffectComposer multisampling={4} enableNormalPass={false}>
-      <DepthOfField ref={dof} focusRange={0.12} bokehScale={0} resolutionScale={0.5} />
-      {common}
-    </EffectComposer>
-  );
 }
 
 function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onFlightDone, basket, reducedMotion, labels, price, spinRef, mobile }: SceneProps & { mobile: boolean }) {
@@ -227,7 +190,6 @@ function World({ shelves, rtl, progress, selected, onPick, onHover, flights, onF
 
       <CameraRig bays={shelves.length} rtl={rtl} progress={progress} cartRef={cartRef} reducedMotion={reducedMotion} />
 
-      <Effects poseRef={pose} mobile={mobile} />
     </>
   );
 }

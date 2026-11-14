@@ -40,7 +40,7 @@ export function GondolaFrame({ accent }: { accent?: string }) {
         <meshStandardMaterial map={peg} color="#ffffff" roughness={0.75} />
       </mesh>
       {[-1, 1].map((s) => (
-        <mesh key={s} position={[(s * len) / 2, h / 2, 0]} castShadow receiveShadow>
+        <mesh key={s} position={[(s * len) / 2, h / 2, 0]} receiveShadow>
           <boxGeometry args={[0.05, h, d]} />
           <meshStandardMaterial color={METAL} roughness={0.4} metalness={0.7} />
         </mesh>
@@ -63,7 +63,7 @@ export function GondolaFrame({ accent }: { accent?: string }) {
       )}
       {boards.map((y) => (
         <group key={y} position={[0, y - 0.02, 0]}>
-          <mesh castShadow receiveShadow>
+          <mesh receiveShadow>
             <boxGeometry args={[len - 0.06, 0.035, d - 0.04]} />
             <meshStandardMaterial color={BOARD} roughness={0.55} />
           </mesh>
@@ -127,7 +127,7 @@ function StockGondolas({ bays, rtl }: { bays: number; rtl: boolean }) {
           <GondolaFrame />
         </group>
       ))}
-      <instancedMesh ref={ref} args={[undefined, undefined, count]} castShadow receiveShadow>
+      <instancedMesh ref={ref} args={[undefined, undefined, count]}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.45} />
       </instancedMesh>
@@ -160,11 +160,8 @@ export function Warehouse({ bays, rtl, storeName, checkout }: { bays: number; rt
   return (
     <group>
       {/* dim fill: the store is lit by pools of warm light, not flat daylight */}
-      <hemisphereLight args={["#ffe6c7", "#17110c", 0.32]} />
-      {Array.from({ length: bays }, (_, i) => {
-        const side = sideOf(i, rtl);
-        return <BayLight key={i} position={[-side * 0.4, CEILING - 0.15, zoneZ(i) + 0.6]} target={[side * AISLE_HALF, 1.2, zoneZ(i)]} />;
-      })}
+      <hemisphereLight args={["#ffe6c7", "#2a2018", 0.75]} />
+      {/* bays are lit by the key light that follows the shopper; fixed lights only at both ends */}
       <BayLight position={[0, CEILING - 0.15, cz + 1.6]} target={[0, 1.2, cz - 0.6]} intensity={7} />
       <BayLight position={[0, CEILING - 0.15, 2.2]} target={[0, 0, 0.2]} intensity={9} />
 
@@ -212,7 +209,7 @@ export function Warehouse({ bays, rtl, storeName, checkout }: { bays: number; rt
       {/* entrance arch */}
       <group position={[0, 0, 0.9]}>
         {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * (AISLE_HALF + 0.15), 1.7, 0]} castShadow>
+          <mesh key={s} position={[s * (AISLE_HALF + 0.15), 1.7, 0]}>
             <boxGeometry args={[0.3, 3.4, 0.3]} />
             <meshStandardMaterial color={METAL} metalness={0.6} roughness={0.45} />
           </mesh>
@@ -350,14 +347,14 @@ export function KeyLight({ bays, rtl, progress, mobile }: { bays: number; rtl: b
       ref={light}
       position={[0, CEILING - 0.3, 2.4]}
       color="#ffe0bb"
-      intensity={24}
+      intensity={30}
       angle={0.7}
       penumbra={0.7}
       decay={1.3}
       distance={10}
-      castShadow
-      shadow-mapSize-width={mobile ? 1024 : 2048}
-      shadow-mapSize-height={mobile ? 1024 : 2048}
+      castShadow={!mobile}
+      shadow-mapSize-width={1024}
+      shadow-mapSize-height={1024}
       shadow-bias={-0.0004}
       shadow-normalBias={0.02}
       shadow-radius={4}

@@ -130,7 +130,7 @@ export function HeldPack({
       return;
     }
     const delta = Math.min(rawDelta, 0.1);
-    a.t = Math.min(1, Math.max(0, a.t + a.dir * (delta / (reducedMotion ? 0.05 : 0.7))));
+    a.t = Math.min(1, Math.max(0, a.t + a.dir * (delta / (reducedMotion ? 0.05 : 0.45))));
     if (a.dir < 0 && a.t <= 0) {
       replace(null);
       a.dir = 0;

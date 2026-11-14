@@ -208,7 +208,6 @@ function ShelfPacks({
       <instancedMesh
         ref={mesh}
         args={[geo.pack, materials, facings]}
-        castShadow
         receiveShadow
         onClick={(e) => {
           e.stopPropagation();

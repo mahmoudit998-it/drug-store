@@ -20,7 +20,7 @@ export function toCartItem(p: ProductWithRefs) {
   };
 }
 
-export function ProductCard({ p, lang, t, priority }: { p: ProductWithRefs; lang: Locale; t: Dictionary; priority?: boolean }) {
+export function ProductCard({ p, lang, t, priority, sizes }: { p: ProductWithRefs; lang: Locale; t: Dictionary; priority?: boolean; sizes?: string }) {
   const off = discountPct(Number(p.price), p.compare_at_price ? Number(p.compare_at_price) : null);
   const href = `/${lang}/products/${p.slug}`;
   return (
@@ -31,7 +31,7 @@ export function ProductCard({ p, lang, t, priority }: { p: ProductWithRefs; lang
             src={p.image_url}
             alt=""
             fill
-            sizes="(min-width: 1280px) 200px, (min-width: 768px) 25vw, 45vw"
+            sizes={sizes ?? "(min-width: 1280px) 200px, (min-width: 768px) 25vw, 45vw"}
             priority={priority}
             className="object-contain p-1 transition-transform duration-300 group-hover:scale-[1.04]"
           />
