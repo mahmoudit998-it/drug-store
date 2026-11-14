@@ -2,11 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, Headset, ShieldCheck, Store, Truck } from "lucide-react";
-import { dir, fmt, getDictionary, hasLocale, tr } from "@/lib/i18n";
+import { fmt, getDictionary, hasLocale, tr } from "@/lib/i18n";
 import { getActiveBanner, getBestSellers, getCategories, getCompanies, getMaxDiscount, getSettings } from "@/lib/data";
 import { waLink } from "@/lib/format";
-import { ProductCard } from "@/components/site/product-card";
-import { ScrollMarquee } from "@/components/site/scroll-marquee";
+import { BestSellersDeck } from "@/components/site/best-sellers-deck";
 import { Arrow, CategoryStrip, FeaturesStrip, OfferBanner, SectionHeading, TrustBadge } from "@/components/site/sections";
 
 export default async function Home({ params }: PageProps<"/[lang]">) {
@@ -80,19 +79,7 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
       </div>
 
       {best.length > 0 && (
-        <section className="mt-12">
-          <div className="container-x">
-            <SectionHeading title={t.best.title} href={`/${lang}/products`} linkLabel={t.best.viewAll} lang={lang} />
-          </div>
-          {/* the row glides to the right while the page scrolls down */}
-          <ScrollMarquee dir={dir(lang)}>
-            {best.map((p, i) => (
-              <div key={p.id} className="grid w-44 shrink-0 sm:w-56">
-                <ProductCard p={p} lang={lang} t={t} priority={i < 2} />
-              </div>
-            ))}
-          </ScrollMarquee>
-        </section>
+        <BestSellersDeck products={best} lang={lang} t={t} />
       )}
 
       {/* 3D store promo */}

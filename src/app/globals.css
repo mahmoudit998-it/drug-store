@@ -50,3 +50,15 @@
     display: none;
   }
 }
+
+/* best sellers deck: details panel fades up when the front card changes */
+@keyframes deckIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
