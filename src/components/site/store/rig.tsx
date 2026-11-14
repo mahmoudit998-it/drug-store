@@ -61,7 +61,7 @@ export function CameraRig({
       w.p = target;
       w.started = true;
     } else {
-      w.p = smoothDamp(w.p, target, w, reducedMotion ? 0.04 : 0.55, delta);
+      w.p = smoothDamp(w.p, target, w, reducedMotion ? 0.04 : 0.38, delta);
     }
 
     const pos = Math.min(stops - 1, Math.max(0, w.p));

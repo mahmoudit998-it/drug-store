@@ -115,7 +115,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
   const lenisRef = useRef<Lenis | null>(null);
   useEffect(() => {
     if (reducedMotion) return;
-    const lenis = new Lenis({ autoRaf: true, lerp: 0.075, wheelMultiplier: 0.8, allowNestedScroll: true });
+    const lenis = new Lenis({ autoRaf: true, lerp: 0.11, wheelMultiplier: 0.85, allowNestedScroll: true });
     lenisRef.current = lenis;
     return () => {
       lenis.destroy();
@@ -129,7 +129,7 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
       if (!el) return;
       const total = el.offsetHeight - window.innerHeight;
       const top = window.scrollY + el.getBoundingClientRect().top + (rawForStop(target, stops) / (stops - 1)) * total;
-      if (lenisRef.current) lenisRef.current.scrollTo(top, { duration: 1.8 });
+      if (lenisRef.current) lenisRef.current.scrollTo(top, { duration: 1.2 });
       else window.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
     },
     [stops, reducedMotion]
@@ -215,6 +215,9 @@ function Store3D({ lang, t, shelves, whatsapp, freeMin }: Props) {
             />
           </div>
         )}
+
+        {/* lens vignette, drawn by the page instead of a post-processing pass */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,.55)_100%)]" />
 
         {/* while a pack is in hand: drag to turn it, tap to put it back */}
         {product && webgl && <TurnLayer spinRef={spin} onTap={() => setSelected(null)} hint={s.turnPack} />}
